@@ -1,7 +1,30 @@
-import logging, time, os
+import logging
+import time
+import os
 
+
+def slice_list(_list: list, slice_size: int) -> list:
+    '''Slices a list into smaller lists of size `slice_size`'''
+    if not isinstance(_list, list):
+        raise ValueError('Invalid argument type for `list`')
+    if not isinstance(slice_size, int):
+        raise ValueError('Invalid argument type for `slice_size`')
+    if slice_size < 1:
+        raise ValueError('`slice_size` should be greater than 0')
+
+    return [_list[i:i+slice_size] for i in range(0, len(_list), slice_size)]
+
+def get_current_date() -> str:
+    '''Returns the current date in the format: 12/12/2021'''
+    return time.strftime("%d/%m/%Y", time.gmtime())
+
+
+def get_current_time() -> str:
+    '''Returns the current time in the format: 12/12/2021 12:12:12 (UTC)'''
+    return time.strftime("%d/%m/%Y %H:%M:%S (%Z)", time.gmtime())
 
 class Logger:
+    '''Logger class for logging messages to a file.'''
     _level = logging.INFO
     _format: str = "%(asctime)s - %(levelname)s - %(message)s"
 
@@ -18,10 +41,12 @@ class Logger:
         self.filename = log_filename
 
     def _update_basic_config(self):
+        '''Updates the basic config for the logger'''
         logging.basicConfig(filename=self.filename, level=self._level, 
-                            format=self._format, datefmt="%H:%M:%S")
+                            format=self._format, datefmt="%d/%m/%Y %H:%M:%S (%Z)")
     
     def log(self, message: str, level: str | None="INFO"):
+        '''Logs a message to a file using the specified level. If no level is provided, the default level is INFO'''
         if level is None:
             return self.log_info(message)
         if not isinstance(level, str):
@@ -38,6 +63,7 @@ class Logger:
                 return self.log_error(message)
 
     def log_info(self, message: str):
+        '''Logs a message to a file using the INFO level'''
         if not message:
             ValueError("`message` is a required argument")
         if not isinstance(message, str):
@@ -48,6 +74,7 @@ class Logger:
         logging.info(msg=message)
     
     def log_debug(self, message: str):
+        '''Logs a message to a file using the DEBUG level'''
         if not message:
             ValueError("`message` is a required argument")
         if not isinstance(message, str):
@@ -58,6 +85,7 @@ class Logger:
         logging.debug(msg=message)
     
     def log_error(self, message: str):
+        '''Logs a message to a file using the ERROR level'''
         if not message:
             ValueError("`message` is a required argument")
         if not isinstance(message, str):
@@ -68,6 +96,7 @@ class Logger:
         logging.error(msg=message)
 
     def log_warning(self, message: str):
+        '''Logs a message to a file using the WARNING level'''
         if not message:
             ValueError("`message` is a required argument")
         if not isinstance(message, str):
