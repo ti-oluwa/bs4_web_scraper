@@ -1,6 +1,7 @@
-from typing import Any
+from typing import Any, Dict, List
 import requests
 import os
+import io
 import random
 import time
 import json
@@ -8,14 +9,14 @@ import string
 import math
 import copy
 from bs4 import BeautifulSoup
-from bs4.element import Tag
+from bs4.element import Tag, ResultSet
 from urllib3.util.url import parse_url, Url
 from urllib.parse import urljoin
 import translators as ts
 from translators.server import tss
 from concurrent.futures import ThreadPoolExecutor
 
-from .utils import Logger, RequestLimitSetting, slice_list
+from .utils import Logger, RequestLimitSetting, slice_list, get_current_time
 
 # DEFAULT USER-AGENTS THAT CAN BE USED IN PLACE OF THE RANDOM USER-AGENTS
 # USER_AGENTS = [
@@ -24,8 +25,6 @@ from .utils import Logger, RequestLimitSetting, slice_list
 # ]
 
 
-
-# ADD ABILITY TO SCRAPE WITH LOGIN DETAILS
 # SCRAPE SITES WITH PAGINATION
 
 class BS4WebScraper:
@@ -76,8 +75,8 @@ class BS4WebScraper:
     @param str `translation_engine`: The translation engine to use for translation. Case sensitive. Defaults to 'google'. This can be any of the supported translation engines.
     If the translation engine is not supported, the default translation engine will be used. See `translators` package for more information or do:
 
-    >>> import bs4_web_scraper
-    >>> print(bs4_web_scraper.available_translation_engines)
+    >>> from bs4_web_scraper import help
+    >>> print(help.available_translation_engines)
 
     #### To use a different translation engine, do:
 
@@ -155,7 +154,7 @@ class BS4WebScraper:
 
     _base_url: str = None
     _auth_url: str = None
-    _auth_credentials: dict = None
+    _auth_credentials: Dict[str, str] = None
     _is_authenticated: bool = False
     _level_reached: int = 0
     _request_session: requests.Session = requests.Session()
@@ -164,7 +163,7 @@ class BS4WebScraper:
     translation_engine: str = 'google'
     translator_target_language: str = None
     translator_source_language: str = None
-    _translatable_elements: list = [
+    _translatable_elements: List[str] = [
                                 'h1', 'u', 's', 'abbr', 'del', 'pre', 'h5', 'sub', 'kbd', 'li', 
                                 'dd', 'textarea', 'dt', 'input', 'em', 'sup', 'label', 'button', 'h6', 
                                 'title', 'dfn', 'th', 'acronym', 'cite', 'samp', 'td', 'p', 'ins', 'big', 
@@ -181,12 +180,12 @@ class BS4WebScraper:
                     'link|{"type": "image/svg"}', 'link|{"type": "image/webp"}',
                 ]
 
-    _trans_cache: dict = dict()
+    _trans_cache: Dict[str, str] = dict()
 
-    def __init__(self, parser: str = 'lxml', html_filename: str="index.html", 
+    def __init__(self, parser: str = 'lxml', html_filename: str = "index.html", 
                 no_of_requests_before_pause: int = 20, scrape_session_pause_duration: int | float | Any = "auto",
                 max_no_of_retries: int = 2, base_storage_dir: str = '.', storage_path: str = '', 
-                log_filename: str | None = None, translation_engine: str | None = 'google'):
+                log_filename: str | None = None, translation_engine: str | None = 'google') -> None:
 
         if not isinstance(parser, str):
             raise ValueError('`parser` should be of type str')
@@ -234,7 +233,7 @@ class BS4WebScraper:
         self.request_limit_setting = RequestLimitSetting(self.no_of_requests_before_pause, self.scrape_session_pause_duration, self.max_no_of_retries, self.logger)
 
     @property
-    def translator_supported_languages(self) -> dict: #
+    def translator_supported_languages(self) -> dict:
         if self.translation_engine:
             args = ('yes','en', 'zh')
             func = lambda f: getattr(tss, f"{self.translation_engine}")(*f)
@@ -243,9 +242,13 @@ class BS4WebScraper:
         return dict()
 
 
-    def _get_base_url(self, url: str):
+    def _get_base_url(self, url: str) -> str:
         '''
         Returns a base url containing only the host, scheme and port
+
+        Args:
+            url (str): The url to be parsed. The url should be of the format `http://www.example.com:80/path/to/resource?query=string`,
+            The base url will be `http://www.example.com:80`.
         '''
         if not isinstance(url, str):
             raise ValueError('`url` should be of type str')
@@ -257,11 +260,14 @@ class BS4WebScraper:
         return new_url_obj.url
 
     
-    def _validate_auth_credentials(self, credentials: dict):
+    def _validate_auth_credentials(self, credentials: Dict[str, str]) -> None:
         '''
         Validates the authentication credentials.
 
         Returns the authentication URL.
+
+        Args:
+            credentials (dict): A dictionary containing the authentication credentials.
         '''
         if not isinstance(credentials, dict):
             raise ValueError('Invalid type for `credentials`')
@@ -293,8 +299,13 @@ class BS4WebScraper:
         return auth_url_obj.url
 
 
-    def _set_auth_credentials(self, credentials: dict):
-        '''Sets the instance's request authentication related attributes from user provided credentials.'''
+    def _set_auth_credentials(self, credentials: Dict[str, str]) -> None:
+        '''
+        Sets the instance's request authentication related attributes from user provided credentials.
+        
+        Args:
+            credentials (Dict[str, str]): Authentication credentials
+        '''
         if not self._base_url:
             raise AttributeError("`self._base_url` cannot be NoneType.")
         if not isinstance(self._base_url, str):
@@ -309,11 +320,17 @@ class BS4WebScraper:
         self._auth_credentials = _credentials
 
 
-    def _translate_text(self, text: str, src_lang: str="auto", target_lang: str="en"):
+    def _translate_text(self, text: str, src_lang: str="auto", target_lang: str="en") -> str:
         '''
         Translate text from `src_lang` to `target_lang` using `self.translator`.
 
         Returns translated text.
+
+        Args:
+            text (str): Text to be translated
+            src_lang (str, optional): Source language. Defaults to "auto".
+            target_lang (str, optional): Target language. Defaults to "en".
+
         '''
         if not isinstance(text, str):
             raise ValueError("Invalid type for `text`")
@@ -322,7 +339,8 @@ class BS4WebScraper:
         if not isinstance(target_lang, str):
             raise ValueError("Invalid type for `target_lang`")
 
-        translated_text = ts.translate_text(text, to_language=target_lang, from_language=src_lang, translator=self.translation_engine)
+        translated_text = ts.translate_text(query_text=text, to_language=target_lang, 
+                                            from_language=src_lang, translator=self.translation_engine)
         return translated_text
 
     # NOT FUNCTIONAL FOR NOW
@@ -331,6 +349,10 @@ class BS4WebScraper:
     #     Translates the html content from `src_lang` to `target_lang` using `self.translator`.
 
     #     Returns translated html.
+    #     Args:
+    #         html (str | bytes): HTML content to be translated
+    #         src_lang (str, optional): Source language. Defaults to "auto".
+    #         target_lang (str, optional): Target language. Defaults to "en".
     #     '''
     #     if not isinstance(html, (str, bytes)):
     #         raise ValueError("Invalid type for `html`")
@@ -345,8 +367,22 @@ class BS4WebScraper:
     #     return translated_html
 
 
-    def _translate_soup_element(self, element: Tag, _ct: int = 0):
-        if element.string is not None:
+    def _translate_soup_element(self, element: Tag, _ct: int = 0) -> None:
+        '''
+        Translates the text of a BeautifulSoup element.
+
+        Args:
+            element (bs4.element.Tag): The element whose text is to be translated.
+            _ct (int, optional): The number of times the function has been called recursively. Defaults to 0.
+            Do not pass this argument manually.
+        
+        '''
+        if not isinstance(element, Tag):
+            raise ValueError("Invalid type for `element`")
+        if not isinstance(_ct, int):
+            raise ValueError("Invalid type for `_ct`")
+
+        if element.string.strip():
             initial_string = copy.copy(element.string)
             cached_translation = self._trans_cache.get(element.string, None)
             if cached_translation:
@@ -365,8 +401,16 @@ class BS4WebScraper:
                     self._trans_cache[initial_string] = translation
 
 
-    def _lang_is_supported(self, lang_code: str):
-        '''Check if the specified language code is supported by `self.translator`'''
+    def _lang_is_supported(self, lang_code: str) -> bool:
+        '''
+        Check if the specified language code is supported by `self.translator`
+        
+        Returns True if supported, else False.
+
+        Args:
+            lang_code (str): The language code to check.
+        
+        '''
         if not isinstance(lang_code, str):
             raise ValueError("Invalid type for `lang_code`")
         lang_code = lang_code.strip().lower()
@@ -375,7 +419,14 @@ class BS4WebScraper:
         return bool(self.translator_supported_languages.get(lang_code, None)) if self.translator_supported_languages else False
 
 
-    def _set_translator_target(self, target_lang: str):
+    def _set_translator_target(self, target_lang: str) -> None:
+        '''
+        Sets the instance's target language for translation.
+
+        Args:
+            target_lang (str): The target language for translation.
+        
+        '''
         if target_lang and not isinstance(target_lang, str):
             raise ValueError('`target_lang` should be of type str')
         if target_lang and not self._lang_is_supported(target_lang):
@@ -384,7 +435,14 @@ class BS4WebScraper:
         self.translator_target_language = target_lang.strip().lower()
 
 
-    def _set_translator_source(self, src_lang: str):
+    def _set_translator_source(self, src_lang: str) -> None:
+        '''
+        Sets the instance's source language for translation.
+
+        Args:
+            src_lang (str): The source language for translation.
+        
+        '''
         if src_lang and not isinstance(src_lang, str):
             raise ValueError('`src_lang` should be of type str')
         if src_lang and not self._lang_is_supported(src_lang):
@@ -393,8 +451,13 @@ class BS4WebScraper:
         self.translator_source_language = src_lang.strip().lower()
         
 
-    def _scrape(self, url: str, scrape_depth: int = 1, credentials: dict | None = None, translate_to: str = None):
+    def _scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None = None, translate_to: str = None) -> None:
+        '''
+        Main scraping method.
         
+        NOTE: This method is not meant to be called directly. It is called by the `scrape` method.
+        Use the `scrape` method instead.
+        '''
         if not isinstance(url, str):
             raise ValueError('`url` should be of type str')
 
@@ -404,12 +467,12 @@ class BS4WebScraper:
         if not isinstance(scrape_depth, int):
             raise ValueError('`scrape_depth` should be of type int')
 
-
         # use proper url format
         url = _url_obj.url
 
         # set translator target lang
-        self._set_translator_target(translate_to)
+        if translate_to:
+            self._set_translator_target(translate_to)
 
         # set the base url of the website
         if self._level_reached == 0:
@@ -461,22 +524,25 @@ class BS4WebScraper:
             if self._level_reached == 0:
                 self._level_reached += 1  
 
-        # Create new base file with updated link_href, script_src, style_href and image_src
-        # self.create_file(filename='self._base_html_filename', content=soup.prettify(formatter='html'), create_mode='x', encoding='utf-8')
+        # Create new base file with updated link_href, script_src, image_src, href's etc.
+        self.logger.log_info("REWRITING BASE HTML FILE WITH UPDATED ELEMENT ATTRIBUTES\n")
+        self._create_file(filename=self._base_html_filename, storage_path=self.storage_path, 
+                            content=soup.prettify(formatter='html'), create_mode='w', 
+                            encoding='utf-8', translate=False)
    
         scrape_depth -= 1
         if scrape_depth > 0:
             self.logger.log_info(f'~~~SCRAPING AT LEVEL {self._level_reached + 1}~~~\n')
             self._level_reached += 1
+
             for (url, storage_path, html_filename) in page_links_details:
                 if all((url, storage_path, html_filename)):
                     self.storage_path = storage_path
                     self._base_html_filename = html_filename
-                
                     return self._scrape(url, scrape_depth)
 
 
-    def scrape(self, url: str, scrape_depth: int = 1, credentials: dict | None=None, translate_to: str=None):
+    def scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None=None, translate_to: str = None) -> None:
         """
         #### Wrapper function for the private `_scrape` function.
 
@@ -523,10 +589,20 @@ class BS4WebScraper:
 
         #
         """
-        start_time = time.perf_counter()
 
         self.logger.log_info("STARTING SCRAPING ACTIVITY...\n")
-        print("STARTING SCRAPING ACTIVITY...\n")
+        self.logger.log_info(f"SCRAPING DEPTH: {scrape_depth if scrape_depth > 0 else 'BASE LEVEL'}\n")
+        if translate_to:
+            self.logger.log_info(f"TRANSLATION ENGINE: {self.translation_engine.upper()}\n")
+            self.logger.log_info(f"TRANSLATING TO: {translate_to.upper()}\n")
+
+        print(f"[{get_current_time()}] - STARTING SCRAPING ACTIVITY...\n")
+        print(f"[{get_current_time()}] - SCRAPING DEPTH: {scrape_depth if scrape_depth > 0 else 'BASE LEVEL'}\n")
+        if translate_to:
+            print(f"[{get_current_time()}] - TRANSLATION ENGINE: {self.translation_engine.upper()}\n")
+            print(f"[{get_current_time()}] - TRANSLATING TO: {translate_to.upper()}\n")
+
+        start_time = time.perf_counter()
         self._scrape(url=url, scrape_depth=scrape_depth, credentials=credentials, 
                     translate_to=translate_to)
         finish_time = time.perf_counter()
@@ -538,14 +614,14 @@ class BS4WebScraper:
             self.logger.log_info("SCRAPED BASE LEVEL SUCCESSFULLY! \n")
 
         if time_taken >= 60:
-            print("SCRAPING COMPLETED IN %.2f MINUTES\n" % (time_taken / 60))
-            self.logger.log_info("SCRAPING COMPLETED IN %.2f MINUTES\n" % (time_taken / 60))
+            print(f"[{get_current_time()}] - SCRAPING COMPLETED IN {(time_taken / 60):.2f} MINUTES\n")
+            self.logger.log_info(f"SCRAPING COMPLETED IN {(time_taken/ 60):.2f} SECONDS\n")
         else:
-            print("SCRAPING COMPLETED IN %.2f SECONDS\n" % time_taken)
-            self.logger.log_info("SCRAPING COMPLETED IN %.2f SECONDS\n" % time_taken)
+            print(f"[{get_current_time()}] - SCRAPING COMPLETED IN {time_taken:.2f} SECONDS\n")
+            self.logger.log_info(f"SCRAPING COMPLETED IN {time_taken:.2f} SECONDS\n")
 
 
-    def generate_random_user_agents(self):
+    def generate_random_user_agents(self) -> list:
         '''Generates and returns three random and simple header user agents.'''
         nums = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
 
@@ -561,7 +637,7 @@ class BS4WebScraper:
         return user_agents
 
 
-    def get_request_headers(self):
+    def get_request_headers(self) -> dict:
         '''Returns a suitable request header'''
         if not isinstance(self.generate_random_user_agents(), list):
             raise Exception("Invalid return type for `self.generate_random_user_agents`")
@@ -593,11 +669,13 @@ class BS4WebScraper:
         return headers
 
 
-    def _make_request(self, url: str):  
+    def _make_request(self, url: str) -> requests.Response:  
         '''
         Makes a GET request to url given, authenticates requests and limits request rate based on limit setting if provided. 
         
         Returns response if OK.
+        Args:
+            url (str): url to make request to
         '''  
         if not isinstance(url, str):
             raise ValueError('url is not a string')
@@ -661,12 +739,22 @@ class BS4WebScraper:
                 return self._make_request(url, request_limit_setting)
     
 
-    def _create_file(self, filename: str, storage_path: str, content: str | bytes, create_mode: str = "xb", encoding: str | None = None):
+    def _create_file(self, filename: str, storage_path: str, content: str | bytes, 
+                        create_mode: str = "xb", encoding: str | None = None, translate: bool = True) -> io.TextIOWrapper | io.BufferedWriter:
         '''
         Creates file using given arguments and write content into file. 
         If the file exists, just write the content into the file. 
         
         Returns the file object opened in read mode.
+
+        Args:
+            filename (str): Name of the file to be created.
+            storage_path (str): Path to the directory where the file will be created.
+            content (str | bytes): Content to be written into the file.
+            create_mode (str, optional): Mode to be used when creating the file. Defaults to "xb".
+            encoding (str | None, optional): Encoding to be used when creating the file. Defaults to None.
+            translate (bool, optional): Whether to translate the content to the encoding specified. Defaults to True.
+
         '''
         
         if not isinstance(filename, str):
@@ -690,13 +778,12 @@ class BS4WebScraper:
         if create_mode in ["x", "w"] and encoding is None:
             raise ValueError("Encoding cannot be NoneType when `create_mode` is 'x'.")
 
-        # translate
-        if self.translator_target_language and filename.endswith('.html'):
+        # Translate
+        if translate and (self.translator_target_language and filename.endswith('.html')):
             self.logger.log_info('TRANSLATING CONTENT...\n')
-
             soup = BeautifulSoup(content, self.parser)
             with ThreadPoolExecutor() as executor:
-                for list_item in slice_list(soup.findAll(self._translatable_elements), 10):
+                for list_item in slice_list(soup.findAll(self._translatable_elements), 50):
                     executor.map(self._translate_soup_element, list_item)
                     time.sleep(2)
             
@@ -737,14 +824,28 @@ class BS4WebScraper:
             return self._create_file(filename, storage_path, content, write_mode, encoding)
             
 
-    def _parse_storage_path(self, url_obj: Url):
-        '''Returns a suitable storage path from a Url'''
+    def _parse_storage_path(self, url_obj: Url) -> str:
+        '''
+        Returns a suitable storage path from a Url.
+
+        Args:
+            url_obj (Url): Url object to be parsed.
+        '''
+        if not isinstance(url_obj, Url):
+            raise ValueError('`url_obj` should be of type Url')
+
         url_path = url_obj.path or ''
         return url_path.replace('/', '\\')
 
 
-    def _get_element_src_by_tag_name(self, tag_name: str):
-        '''Return the tag attribute that contains the src url/path'''
+    def _get_element_src_by_tag_name(self, tag_name: str) -> str:
+        '''
+        Return the tag attribute that contains the src url/path.
+
+        Args:
+            tag_name (str): Tag name to be checked.
+        
+        '''
         if not isinstance(tag_name, str):
             raise ValueError('`tag_name` should be of type str')
         tag_name = tag_name.lower()
@@ -755,7 +856,19 @@ class BS4WebScraper:
             return 'href'
         
 
-    def _get_soup_element(self, element: Tag, element_tag_name: str, src: str):
+    def _get_soup_element(self, element: Tag, element_tag_name: str, src: str) -> None:
+        '''
+        Get the element src and download the file.
+
+        Args:
+            element (Tag): Element to be checked.
+            element_tag_name (str): Element tag name.
+            src (str): Element src attribute.
+        
+        '''
+        if not isinstance(element, Tag):
+            raise ValueError('`element` should be of type Tag')
+
         element_src: str = element.attrs.get(src)
         if element_tag_name.lower() == 'use':
             element_src = element_src.split('#')[0]
@@ -809,16 +922,21 @@ class BS4WebScraper:
                         self.url_query_params.append(url_obj.query) 
 
                     # change the element's src to be compatible with the scraped website
-                    # element.href = full_path.replace('\\', '/')
+                    element['href'] = full_path.replace('\\', '/')
         
 
-    def _get_associated_files(self, soup: BeautifulSoup):
-        '''Scrapes all the soup tags present in `self.scrapable_tags`'''
+    def _get_associated_files(self, soup: BeautifulSoup) -> None:
+        '''
+        Scrapes all the soup tags present in `self.scrapable_tags`
+        
+        Args:
+            soup (BeautifulSoup): BeautifulSoup object to be scraped.
+        '''
         if not isinstance(soup, BeautifulSoup):
             raise ValueError("`soup` should be of type BeautifulSoup")
         
         scrapable_tags = self.scrapable_tags
-        elements = None
+        elements: ResultSet = None
         
         for scrapable_tag in scrapable_tags:
             if len(scrapable_tag.split('|')) == 1:
@@ -831,22 +949,28 @@ class BS4WebScraper:
                 elements = soup.find_all(tag_name, attrs)
 
             if elements:
-                self.logger.log_info('GETTING "%s" ELEMENTS... \n' % scrapable_tag)
+                self.logger.log_info(f'GETTING "{scrapable_tag}" ELEMENTS... \n' )
                 for element in elements:
                     src = self._get_element_src_by_tag_name(tag_name)
                     if element.attrs.get(src):
                         self._get_soup_element(element, tag_name, src)
 
 
-    def _generate_unique_id(self):
+    def _generate_unique_id(self) -> str:
         '''Returns a random string of random length'''
         sample = list('0123456789' + string.ascii_lowercase)
         id = "".join(random.choices(sample, k=random.randint(4, 6)))
         return id
 
 
-    def _generate_unique_filename(self, old_filename: str):
-        '''Returns the filename but with a random id to make it unique.'''
+    def _generate_unique_filename(self, old_filename: str) -> str:
+        '''
+        Returns the old filename but with a random id to make it unique.
+
+        Args:
+            old_filename (str): Old filename to be modified.
+        
+        '''
         if not isinstance(old_filename, str):
             raise ValueError('`old_filename` should be of type str')
 
@@ -855,7 +979,17 @@ class BS4WebScraper:
         return unique_filename
 
 
-    def _get_soup_link(self, link: Tag):
+    def _get_soup_link(self, link: Tag) -> None:
+        '''
+        Get the link href and download the file
+        
+        Args:
+            link (Tag): Link to be scraped.
+        
+        '''
+        if not isinstance(link, Tag):
+            raise ValueError('`link` should be of type Tag')
+
         link_href = link.get('href', None)
         actual_url = None
         new_storage_path = None
@@ -920,7 +1054,7 @@ class BS4WebScraper:
                         self._get_associated_files(new_soup)
 
                     # change the link's href to be compatible with the scraped website
-                    # link.href = full_path.replace('\\', '/')
+                    link['href'] = full_path.replace('\\', '/')
 
         return (actual_url, new_storage_path, html_filename)
 
