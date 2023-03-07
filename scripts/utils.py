@@ -1,10 +1,18 @@
 import logging
 import time
 import os
+from typing import List
 
 
-def slice_list(_list: list, slice_size: int) -> list:
-    '''Slices a list into smaller lists of size `slice_size`'''
+def slice_list(_list: List, slice_size: int) -> list:
+    '''
+    Slices a list into smaller lists of size `slice_size`
+
+    Args:
+        _list (List): The list to slice
+        slice_size (int): The size of each slice
+    
+    '''
     if not isinstance(_list, list):
         raise ValueError('Invalid argument type for `list`')
     if not isinstance(slice_size, int):
@@ -14,21 +22,33 @@ def slice_list(_list: list, slice_size: int) -> list:
 
     return [_list[i:i+slice_size] for i in range(0, len(_list), slice_size)]
 
+
 def get_current_date() -> str:
     '''Returns the current date in the format: 12/12/2021'''
     return time.strftime("%d/%m/%Y", time.gmtime())
 
 
-def get_current_time() -> str:
-    '''Returns the current time in the format: 12/12/2021 12:12:12 (UTC)'''
+def get_current_date_time() -> str:
+    '''Returns the current date and time in the format: 12/12/2021 12:12:12 (UTC)'''
     return time.strftime("%d/%m/%Y %H:%M:%S (%Z)", time.gmtime())
 
+
+def get_current_time() -> str:
+    '''Returns the current time in the format: 12:12:12 (UTC)'''
+    return time.strftime("%H:%M:%S (%Z)", time.gmtime())
+
 class Logger:
-    '''Logger class for logging messages to a file.'''
+    '''
+    Logger class for logging messages to a file.
+
+    Args:
+        log_filename (str): The name of the log file to log messages to. Defaults to "log.log".
+    
+    '''
     _level = logging.INFO
     _format: str = "%(asctime)s - %(levelname)s - %(message)s"
 
-    def __init__(self, log_filename: str):
+    def __init__(self, log_filename: str = 'log.log') -> None:
         if not isinstance(log_filename, str):
             raise ValueError('Invalid argument type for `log_filename`')
 
@@ -40,13 +60,19 @@ class Logger:
 
         self.filename = log_filename
 
-    def _update_basic_config(self):
+    def _update_basic_config(self) -> None:
         '''Updates the basic config for the logger'''
         logging.basicConfig(filename=self.filename, level=self._level, 
                             format=self._format, datefmt="%d/%m/%Y %H:%M:%S (%Z)")
     
-    def log(self, message: str, level: str | None="INFO"):
-        '''Logs a message to a file using the specified level. If no level is provided, the default level is INFO'''
+    def log(self, message: str, level: str | None = "INFO") -> None:
+        '''
+        Logs a message to a file using the specified level. If no level is provided, the default level is INFO.
+
+        Args:
+            message (str): The message to log
+            level (str, optional): The level to log the message with. Defaults to "INFO".    
+        '''
         if level is None:
             return self.log_info(message)
         if not isinstance(level, str):
@@ -62,7 +88,7 @@ class Logger:
             case "ERROR":
                 return self.log_error(message)
 
-    def log_info(self, message: str):
+    def log_info(self, message: str) -> None:
         '''Logs a message to a file using the INFO level'''
         if not message:
             ValueError("`message` is a required argument")
@@ -73,7 +99,7 @@ class Logger:
         self._update_basic_config()
         logging.info(msg=message)
     
-    def log_debug(self, message: str):
+    def log_debug(self, message: str) -> None:
         '''Logs a message to a file using the DEBUG level'''
         if not message:
             ValueError("`message` is a required argument")
@@ -84,7 +110,7 @@ class Logger:
         self._update_basic_config()
         logging.debug(msg=message)
     
-    def log_error(self, message: str):
+    def log_error(self, message: str) -> None:
         '''Logs a message to a file using the ERROR level'''
         if not message:
             ValueError("`message` is a required argument")
@@ -95,7 +121,7 @@ class Logger:
         self._update_basic_config()
         logging.error(msg=message)
 
-    def log_warning(self, message: str):
+    def log_warning(self, message: str) -> None:
         '''Logs a message to a file using the WARNING level'''
         if not message:
             ValueError("`message` is a required argument")
@@ -137,7 +163,7 @@ class RequestLimitSetting:
     requests_paused = False
     logger: Logger = None
     
-    def __init__(self, request_count: int, pause_duration: int | float = 3, max_retries: int = 2, logger: Logger = None):
+    def __init__(self, request_count: int, pause_duration: int | float = 3, max_retries: int = 2, logger: Logger = None) -> None:
         if not isinstance(request_count, int):
             raise ValueError('`request_count` should be of type int')
         if not isinstance(max_retries, int):
@@ -155,7 +181,7 @@ class RequestLimitSetting:
         self.logger = logger
 
 
-    def request_made(self):
+    def request_made(self) -> None:
         '''Registers that a request has been made'''
         self.no_of_available_request -= 1
         if self.no_of_available_request == 0:
@@ -164,33 +190,38 @@ class RequestLimitSetting:
             self._log("NUMBER OF AVAILABLE REQUESTS RESET!\n")
 
 
-    def _log(self, message: str):
-        '''Logs a message using `self.logger` or prints it out if `self.logger` is None'''
+    def _log(self, message: str) -> None:
+        '''
+        Logs a message using `self.logger` or prints it out if `self.logger` is None.
+
+        Args:
+            message (str): The message to log
+        '''
         if self.logger:
             self.logger.log(message)
         else:
             print(message)            
 
 
-    def got_response_error(self):
+    def got_response_error(self) -> None:
         '''Registers a request response error.'''
         self.no_of_available_retries -= 1
 
-    def reset_max_retry(self):
+    def reset_max_retry(self) -> None:
         '''Resets the the maximum number of retries to the default provided value.'''
         self.no_of_available_retries = self.max_retries
 
     @property
-    def can_make_requests(self):
+    def can_make_requests(self) -> bool:
         '''Returns if requests can be made, if self.request_paused is True, returns False'''
         return (not self.requests_paused)
 
     @property
-    def can_retry(self):
+    def can_retry(self) -> bool:
         '''Returns True if the maximum number of retries has not been exceeded.'''
         return self.no_of_available_retries > 0
 
-    def pause(self):
+    def pause(self) -> None:
         '''Disallows request making for the specified pause duration.'''
         self.requests_paused = True
         self._log("REQUESTS PAUSED")
