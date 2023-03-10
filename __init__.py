@@ -1,6 +1,40 @@
+"""
+A web scraper that uses BeautifulSoup4 to scrape web pages and can translate scraped to other languages.
+
+This module contains the following classes: ::
+    - `BS4WebScraper`: Used to create web scraper instances.
+    - `Translator`: Used to creates instances used to translate text and html to other languages.
+    - `Logger`: Used to creates instances used to log messages to a file.
+    - `RequestLimitSetting`: Used to creates instances that is used to limit request frequency for the scraper.
+
+### Scrape responsibly and Do not send high frequency requests.
+
+MIT License
+------------
+Copyright (c) 2023 ti_oluwa
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
 __version__ = '0.0.1'
 __author__ = 'tioluwa'
-__all__ = ['BS4WebScraper', 'utils', 'help']
+__all__ = ['BS4WebScraper', 'utils', 'help', 'translators']
 __doc__ = 'A web scraper that uses BeautifulSoup4 to scrape web pages and can translates them to other languages.'
 __license__ = 'MIT'
 __title__ = 'bs4_web_scraper'
@@ -13,7 +47,7 @@ __requires__ = ['beautifulsoup4', 'requests', 'translators', 'lxml', 'html5lib',
 
 
 from bs4_web_scraper.scripts.scraper import BS4WebScraper
-from bs4_web_scraper.scripts import utils, help
+from bs4_web_scraper.scripts import utils, help, translators
 
 
 

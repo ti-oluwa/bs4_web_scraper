@@ -1,3 +1,16 @@
+"""
+DESCRIPTION: ::
+    This module contains the BS4WebScraper class which is the base class for creating scraper instances 
+    used to scrape websites.
+
+    Don't make high frequency requests! Scrape responsibly!
+    If you are using this module to scrape websites for commercial purposes, please consider supporting the
+    websites you are scraping by making a donation.
+"""
+
+
+
+from collections.abc import Iterable
 from typing import Any, Dict, List
 import requests
 import os
@@ -5,47 +18,51 @@ import io
 import random
 import time
 import json
-import string
 import math
-import copy
 from bs4 import BeautifulSoup
 from bs4.element import Tag, ResultSet
 from urllib3.util.url import parse_url, Url
 from urllib.parse import urljoin
-import translators as ts
-from translators.server import tss
 from concurrent.futures import ThreadPoolExecutor
 
-from .utils import Logger, RequestLimitSetting, slice_list, get_current_time
-
-# DEFAULT USER-AGENTS THAT CAN BE USED IN PLACE OF THE RANDOM USER-AGENTS
-# USER_AGENTS = [
-#    "Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
-#    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36 Edg/109.0.1518.78",
-# ]
+from .utils import (Logger, RequestLimitSetting, slice_list, 
+                    get_current_time, generate_random_user_agents,
+                    generate_unique_filename)
+from .help import available_translation_engines
+from .translators import Translator
 
 
 # SCRAPE SITES WITH PAGINATION
-
 class BS4WebScraper:
     """
     ### BeautifulSoup4 web scraper class with support for authentication and translation.
 
-    #### Example:
-    To create an instance, do:
+    #### Example: ::
         >>> bs4_scraper = BS4WebScraper(parser='lxml', html_filename='google.html',
                             no_of_requests_before_pause=50, scrape_session_pause_duration='auto',
                             base_storage_dir='./google', storage_path='/', 
                             log_filename='google.log', ...)
-    #              
         >>> bs4_scraper.scrape(url='https://www.google.com', scrape_depth=0)
             'google.html' saves to './google/google.html'
 
-    #
 
     #### NOTE: On instantiation of the class, a new request session is created. This session is used to make all related requests.
 
+    Parameters:
+    -----------
     @param str `parser`: HTML or HTML/XML parser for BeautifulSoup. Default is "lxml", "html.parser" is another suitable parser.
+
+    #### Available parsers: ::
+        - "lxml"
+        - "lxml-xml"
+        - "html.parser"
+        - "html5lib"
+         or it may be the type of markup to be used 
+        - "html"
+        - "html5"
+        - "xml"
+    
+    For more on parsers read the BeatifulSoup documentation [here](https://www.crummy.com/software/BeautifulSoup/bs4/doc/#installing-a-parser)
 
     @param str `html_filename`: Default name used to save '*.html' files.
 
@@ -67,7 +84,7 @@ class BS4WebScraper:
     @param str `storage_path`: Path where the base(index) HTML file will be saved with respect to the `base_storage_dir`.
     Defaults to directly inside the `base_storage_dir`.
 
-    @param str | path `log_filename`: Name of the file logs will be written into. Defaults to 'bs4_scraper.log'.
+    @param str | path `log_filename`: Name of the file logs will be written into. Defaults to '<self.__class__.__name__.lower()>.log'.
     This can also be a path to a directory in which the log file should be saved or the path to an already existing log file.
     #### For instance:
     >>> bs4_scraper = BS4WebScraper(..., log_filename="/<directory_path>/<filename>/")
@@ -105,13 +122,9 @@ class BS4WebScraper:
     - 'yandex'
     - 'youdao'
 
-    @attr str `translator_target_language`: The language the scraped pages will be translated to as provided in the scrape function.
-
-    @attr str `translator_source_language`: The origin language of the the scraped pages.
-
-    @attr list `_translatable_elements`: A list of HTML elements that might contain translatable text.
-
-    @attr dict `translator_supported_languages`: A dictionary of all languages supported by the chosen translation engine.
+    Attributes:
+    -----------
+    @attr dict `supported_languages`: A dictionary of all languages supported by the chosen translation engine.
 
     @attr str `_base_url`: The base URL of the website being scraped.
 
@@ -159,20 +172,12 @@ class BS4WebScraper:
     _level_reached: int = 0
     _request_session: requests.Session = requests.Session()
     _request_user_agent: str = None
-    logger: Logger = Logger('bs4_scraper.log')
-    translation_engine: str = 'google'
-    translator_target_language: str = None
-    translator_source_language: str = None
-    _translatable_elements: List[str] = [
-                                'h1', 'u', 's', 'abbr', 'del', 'pre', 'h5', 'sub', 'kbd', 'li', 
-                                'dd', 'textarea', 'dt', 'input', 'em', 'sup', 'label', 'button', 'h6', 
-                                'title', 'dfn', 'th', 'acronym', 'cite', 'samp', 'td', 'p', 'ins', 'big', 
-                                'caption', 'bdo', 'var', 'h3', 'tt', 'address', 'h4', 'legend', 'i', 
-                                'small', 'b', 'q', 'option', 'code', 'h2', 'a', 'strong', 'span',
-                            ]
+    url_query_params: List = []
+    translator: Translator = Translator()
+    
     scrapable_tags = [
                     'script', 'link|{"rel": "stylesheet"}', 'img', 'use', 
-                    'video', 'link|{"as": "font"}',
+                    'video', 'link|{"as": "font"}', 'link|{"rel": "preload"}',
                     'link|{"rel": "shortcut"}', 'link|{"rel": "icon"}',
                     'link|{"rel": "shortcut icon"}', 'link|{"rel": "apple-touch-icon"}',
                     'link|{"type": "image/x-icon"}', 'link|{"type": "image/png"}',
@@ -180,15 +185,19 @@ class BS4WebScraper:
                     'link|{"type": "image/svg"}', 'link|{"type": "image/webp"}',
                 ]
 
-    _trans_cache: Dict[str, str] = dict()
 
     def __init__(self, parser: str = 'lxml', html_filename: str = "index.html", 
                 no_of_requests_before_pause: int = 20, scrape_session_pause_duration: int | float | Any = "auto",
                 max_no_of_retries: int = 2, base_storage_dir: str = '.', storage_path: str = '', 
-                log_filename: str | None = None, translation_engine: str | None = 'google') -> None:
-
-        if not isinstance(parser, str):
-            raise ValueError('`parser` should be of type str')
+                log_filename: str | None = None, translation_engine: str | None = 'default') -> None:
+        """
+        Initializes the BS4WebScraper class instance.
+        """
+        try:
+            soup = BeautifulSoup("<p>This is a test</p>", parser)
+            soup.contents
+        except Exception as e:
+            raise ValueError(f"Invalid parser for BeautifulSoup: {parser}") from e
         if not isinstance(html_filename, str) or not html_filename.endswith('.html'):
             raise ValueError('`html_filename` should be of type str and should take the format `<filename>.html`.')
         if not isinstance(storage_path, str):
@@ -210,16 +219,26 @@ class BS4WebScraper:
 
         if translation_engine and not isinstance(translation_engine, str):
             raise ValueError('`translation_engine` should be of type str')
-        if translation_engine and translation_engine not in ts.translators_pool:
-            raise Exception("Unsupported translation translation_engine")
+        if translation_engine and (translation_engine != 'default' 
+                                    and translation_engine not in available_translation_engines):
+            raise Exception("Unsupported translation engine")
 
+        
         if log_filename:
             log_filename.replace('/', '\\')
             if '\\' in log_filename:
                 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
-            self.logger = Logger(log_filename)
+            self.logger = Logger(name=f"Logger for {self.__class__.__name__}", log_filename=log_filename)
+        else:
+            self.logger = Logger(name=f"Logger for {self.__class__.__name__}", 
+                                    log_filename=self.__class__.__name__.lower())
+        self.logger.set_base_level('INFO')
+        self.logger.to_console = True
 
-        self.translation_engine = translation_engine
+        if translation_engine != "default":
+                self.translator.translation_engine = translation_engine
+        
+        self.translator.logger = self.logger
         self.parser = parser
         self.html_filename = html_filename
         self._base_html_filename = html_filename
@@ -229,17 +248,9 @@ class BS4WebScraper:
         base_storage_dir = base_storage_dir.replace('/', '\\')
         self.base_storage_dir = base_storage_dir
         self.storage_path = storage_path
-        self.url_query_params = []
-        self.request_limit_setting = RequestLimitSetting(self.no_of_requests_before_pause, self.scrape_session_pause_duration, self.max_no_of_retries, self.logger)
-
-    @property
-    def translator_supported_languages(self) -> dict:
-        if self.translation_engine:
-            args = ('yes','en', 'zh')
-            func = lambda f: getattr(tss, f"{self.translation_engine}")(*f)
-            func(args)
-            return getattr(tss, f"_{self.translation_engine}").language_map
-        return dict()
+        self.request_limit_setting = RequestLimitSetting(self.no_of_requests_before_pause, 
+                                                            self.scrape_session_pause_duration, 
+                                                            self.max_no_of_retries, self.logger)
 
 
     def _get_base_url(self, url: str) -> str:
@@ -260,7 +271,7 @@ class BS4WebScraper:
         return new_url_obj.url
 
     
-    def _validate_auth_credentials(self, credentials: Dict[str, str]) -> None:
+    def _validate_auth_credentials(self, credentials: Dict[str, str]) -> str:
         '''
         Validates the authentication credentials.
 
@@ -271,7 +282,6 @@ class BS4WebScraper:
         '''
         if not isinstance(credentials, dict):
             raise ValueError('Invalid type for `credentials`')
-
         if len(credentials.items()) < 3:
             raise Exception('Some keys may be missing in `credentials`')
         if not credentials.get('auth_username_field', None):
@@ -299,7 +309,7 @@ class BS4WebScraper:
         return auth_url_obj.url
 
 
-    def _set_auth_credentials(self, credentials: Dict[str, str]) -> None:
+    def set_auth_credentials(self, credentials: Dict[str, str]) -> None:
         '''
         Sets the instance's request authentication related attributes from user provided credentials.
         
@@ -319,137 +329,6 @@ class BS4WebScraper:
         _credentials[credentials['auth_password_field']] = credentials['auth_password']
         self._auth_credentials = _credentials
 
-
-    def _translate_text(self, text: str, src_lang: str="auto", target_lang: str="en") -> str:
-        '''
-        Translate text from `src_lang` to `target_lang` using `self.translator`.
-
-        Returns translated text.
-
-        Args:
-            text (str): Text to be translated
-            src_lang (str, optional): Source language. Defaults to "auto".
-            target_lang (str, optional): Target language. Defaults to "en".
-
-        '''
-        if not isinstance(text, str):
-            raise ValueError("Invalid type for `text`")
-        if not isinstance(src_lang, str):
-            raise ValueError("Invalid type for `src_lang`")
-        if not isinstance(target_lang, str):
-            raise ValueError("Invalid type for `target_lang`")
-
-        translated_text = ts.translate_text(query_text=text, to_language=target_lang, 
-                                            from_language=src_lang, translator=self.translation_engine)
-        return translated_text
-
-    # NOT FUNCTIONAL FOR NOW
-    # def _translate_html(self, html: str | bytes, src_lang: str="auto", target_lang: str="en"):
-    #     '''
-    #     Translates the html content from `src_lang` to `target_lang` using `self.translator`.
-
-    #     Returns translated html.
-    #     Args:
-    #         html (str | bytes): HTML content to be translated
-    #         src_lang (str, optional): Source language. Defaults to "auto".
-    #         target_lang (str, optional): Target language. Defaults to "en".
-    #     '''
-    #     if not isinstance(html, (str, bytes)):
-    #         raise ValueError("Invalid type for `html`")
-    #     if not isinstance(src_lang, str):
-    #         raise ValueError("Invalid type for `src_lang`")
-    #     if not isinstance(target_lang, str):
-    #         raise ValueError("Invalid type for `target_lang`")
-
-    #     html = html.decode('utf-8') if isinstance(html, bytes) else html
-    #     translated_html = ts.translate_html(html_text=html, to_language=target_lang, from_language=src_lang, translator=self.translation_engine)
-    #     print("TRANSLATION: ", translated_html)
-    #     return translated_html
-
-
-    def _translate_soup_element(self, element: Tag, _ct: int = 0) -> None:
-        '''
-        Translates the text of a BeautifulSoup element.
-
-        Args:
-            element (bs4.element.Tag): The element whose text is to be translated.
-            _ct (int, optional): The number of times the function has been called recursively. Defaults to 0.
-            Do not pass this argument manually.
-        
-        '''
-        if not isinstance(element, Tag):
-            raise ValueError("Invalid type for `element`")
-        if not isinstance(_ct, int):
-            raise ValueError("Invalid type for `_ct`")
-
-        if element.string.strip():
-            initial_string = copy.copy(element.string)
-            cached_translation = self._trans_cache.get(element.string, None)
-            if cached_translation:
-                element.string.replace_with(cached_translation)
-            else:
-                try:
-                    translation = self._translate_text(text=element.string, target_lang=self.translator_target_language)
-                    element.string.replace_with(translation)
-                except Exception as e:
-                    self.logger.log_error(f'{e}\n')
-                    _ct += 1
-                    time.sleep(4 * _ct)
-                    if _ct <= 3:
-                        return self._translate_soup_element(element, _ct)
-                else:
-                    self._trans_cache[initial_string] = translation
-
-
-    def _lang_is_supported(self, lang_code: str) -> bool:
-        '''
-        Check if the specified language code is supported by `self.translator`
-        
-        Returns True if supported, else False.
-
-        Args:
-            lang_code (str): The language code to check.
-        
-        '''
-        if not isinstance(lang_code, str):
-            raise ValueError("Invalid type for `lang_code`")
-        lang_code = lang_code.strip().lower()
-        if not lang_code:
-            raise ValueError("`lang_code` cannot be empty")
-        return bool(self.translator_supported_languages.get(lang_code, None)) if self.translator_supported_languages else False
-
-
-    def _set_translator_target(self, target_lang: str) -> None:
-        '''
-        Sets the instance's target language for translation.
-
-        Args:
-            target_lang (str): The target language for translation.
-        
-        '''
-        if target_lang and not isinstance(target_lang, str):
-            raise ValueError('`target_lang` should be of type str')
-        if target_lang and not self._lang_is_supported(target_lang):
-            raise Exception("Unsupported target language for translation")
-
-        self.translator_target_language = target_lang.strip().lower()
-
-
-    def _set_translator_source(self, src_lang: str) -> None:
-        '''
-        Sets the instance's source language for translation.
-
-        Args:
-            src_lang (str): The source language for translation.
-        
-        '''
-        if src_lang and not isinstance(src_lang, str):
-            raise ValueError('`src_lang` should be of type str')
-        if src_lang and not self._lang_is_supported(src_lang):
-            raise Exception("Unsupported source language for translation")
-
-        self.translator_source_language = src_lang.strip().lower()
-        
 
     def _scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None = None, translate_to: str = None) -> None:
         '''
@@ -472,13 +351,13 @@ class BS4WebScraper:
 
         # set translator target lang
         if translate_to:
-            self._set_translator_target(translate_to)
+            self.translator.set_translator_target(translate_to)
 
         # set the base url of the website
         if self._level_reached == 0:
             self._base_url = self._get_base_url(url)
         if credentials:
-            self._set_auth_credentials(credentials)
+            self.set_auth_credentials(credentials)
             
         links = None
         page_links_details = []
@@ -503,11 +382,9 @@ class BS4WebScraper:
             raise Exception('Unexpected response type: %s' % type(response))
 
         file_content = index_file.read()
-        index_file.close()
-
         # create soup
         soup = BeautifulSoup(file_content, self.parser)
-
+        index_file.close()
         # get all associated files ('*js', '*.css', font files, ...)
         self._get_associated_files(soup)
 
@@ -547,16 +424,14 @@ class BS4WebScraper:
         #### Wrapper function for the private `_scrape` function.
 
         Scrapes the website provided in the url argument. 
-        Only scrapes includes internal links, images, scripts, use, videos and font files.
-        
-        @param str `url`: The url of the website or webpage to be scraped.
+        The scraped content is saved to the `self.storage_path` directory.
 
-        @param int `scrape_depth`: The number of levels deep to scrape. Defaults to 1.
-
-        @param dict `credentials`: Authentication or login details for website.
-
-        @param str `translate_to`: Language code for the language scraped content will be translated to. The source language
-        is automatically detected by `self.translator`.
+        Args: ::
+            url (str): The url of the website or webpage to be scraped.
+            scrape_depth (int, optional): The number of levels deep to scrape. Defaults to 1.
+            credentials (Dict[str, str], optional): Authentication or login details for website. Defaults to None.
+            translate_to (str, optional): Language code for the language scraped content will be translated to. The source language
+            is automatically detected by `self.translator`. Defaults to None.
 
         #### AUTHENTICATION
         To scrape websites that require authentication. pass in the authentication credentials as an argument to the function.
@@ -577,7 +452,7 @@ class BS4WebScraper:
         To get a dict of the supported languages. do:
         
         >>> bs4_scraper = BS4WebScraper(...)
-        >>> print(bs4_scraper.translator_supported_languages)
+        >>> print(bs4_scraper.translator.supported_languages)
         >>> # {'af': 'afrikaans', 'sq': 'albanian', 'am': 'amharic', ...}
 
         Make sure to set the `translation_engine` argument to the engine you want to use for translation.
@@ -589,17 +464,19 @@ class BS4WebScraper:
 
         #
         """
+        if not isinstance(translate_to, str):
+            raise ValueError("Invalid type for `translate_to`. It s.hould be a string")
 
         self.logger.log_info("STARTING SCRAPING ACTIVITY...\n")
         self.logger.log_info(f"SCRAPING DEPTH: {scrape_depth if scrape_depth > 0 else 'BASE LEVEL'}\n")
         if translate_to:
-            self.logger.log_info(f"TRANSLATION ENGINE: {self.translation_engine.upper()}\n")
+            self.logger.log_info(f"TRANSLATION ENGINE: {self.translator.translation_engine.upper()}\n")
             self.logger.log_info(f"TRANSLATING TO: {translate_to.upper()}\n")
 
         print(f"[{get_current_time()}] - STARTING SCRAPING ACTIVITY...\n")
         print(f"[{get_current_time()}] - SCRAPING DEPTH: {scrape_depth if scrape_depth > 0 else 'BASE LEVEL'}\n")
         if translate_to:
-            print(f"[{get_current_time()}] - TRANSLATION ENGINE: {self.translation_engine.upper()}\n")
+            print(f"[{get_current_time()}] - TRANSLATION ENGINE: {self.translator.translation_engine.upper()}\n")
             print(f"[{get_current_time()}] - TRANSLATING TO: {translate_to.upper()}\n")
 
         start_time = time.perf_counter()
@@ -621,34 +498,18 @@ class BS4WebScraper:
             self.logger.log_info(f"SCRAPING COMPLETED IN {time_taken:.2f} SECONDS\n")
 
 
-    def generate_random_user_agents(self) -> list:
-        '''Generates and returns three random and simple header user agents.'''
-        nums = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-
-        random_agent1 = f"Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/{''.join(random.sample(nums, k=3))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=2))} (KHTML, like Gecko) Mobile/15E148"
-        random_agent2 = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/10{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))} Edg/10{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=4))}.{''.join(random.sample(nums, k=1))} Safari/537.36"
-        random_agent3 = f"Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-A207F) AppleWebKit/537.36 SamsungBrowser/19.0 (KHTML, like Gecko) Chrome/10{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))} Safari/{''.join(random.sample(nums, k=3))}.{''.join(random.sample(nums, k=2))} Edg/10{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=4))}.{''.join(random.sample(nums, k=1))} Safari/537.36"
-        
-        user_agents = [
-            random_agent1,
-            random_agent2,
-            random_agent3,
-        ]
-        return user_agents
-
-
     def get_request_headers(self) -> dict:
         '''Returns a suitable request header'''
-        if not isinstance(self.generate_random_user_agents(), list):
+        if not isinstance(generate_random_user_agents(), list):
             raise Exception("Invalid return type for `self.generate_random_user_agents`")
 
         if self._auth_credentials:
             if not self._request_user_agent:
-                user_agents = self.generate_random_user_agents()
+                user_agents = generate_random_user_agents()
                 random.shuffle(user_agents)
                 self._request_user_agent = random.choice(user_agents)
         else:
-            user_agents = self.generate_random_user_agents()
+            user_agents = generate_random_user_agents()
             random.shuffle(user_agents)
             self._request_user_agent = random.choice(user_agents)
         
@@ -669,7 +530,32 @@ class BS4WebScraper:
         return headers
 
 
-    def _make_request(self, url: str) -> requests.Response:  
+    def authenticate(self, credentials: Dict[str, str] | None = None) -> None:
+        '''
+        Authenticates the scraper to scrape websites that require authentication.
+
+        Args:
+            credentials (Dict[str, str], optional): The authentication credentials. Defaults to None.
+        '''
+        if not credentials and not (self._auth_credentials or self._auth_url):
+            raise Exception('`credentials` must be provided if `self._auth_credentials` or `self._auth_url` have not been set.')
+        if credentials:
+            self.set_auth_credentials(credentials)
+
+        self.logger.log_info(f'AUTHENTICATING AT... --> {self._auth_url}\n')
+        resp = self._request_session.get(url=self._auth_url) 
+        # get and set csrftoken
+        self._auth_credentials['csrfmiddlewaretoken'] = resp.cookies.get('csrftoken')
+        resp = self._request_session.post(url=self._auth_url, data=self._auth_credentials)
+        self._is_authenticated = resp.ok
+
+        if self._is_authenticated:
+            self.logger.log_info('AUTHENTICATED!!!\n')
+        else:
+            self.logger.log_error('AUTHENTICATION FAILED!!!\n')
+
+
+    def _make_request(self, url: str) -> requests.Response | None:  
         '''
         Makes a GET request to url given, authenticates requests and limits request rate based on limit setting if provided. 
         
@@ -679,64 +565,85 @@ class BS4WebScraper:
         '''  
         if not isinstance(url, str):
             raise ValueError('url is not a string')
+        url_obj = parse_url(url)
+        if not (url_obj.netloc or url_obj.scheme):
+            raise ValueError("Invalid url!")
 
-        request_limit_setting = self.request_limit_setting
         headers = self.get_request_headers()
         if not isinstance(headers, dict):
             raise Exception("Invalid return type for `self.get_request_headers`")
-
         self._request_session.headers.update(headers)        
 
-        # authenticate if credentials are provided
-        if not self._is_authenticated and self._auth_credentials:
-            self.logger.log_info(f'AUTHENTICATING AT... --> {self._auth_url}\n')
-            resp = self._request_session.get(url=self._auth_url) 
-            auth_details = self._auth_credentials
-            auth_details['csrfmiddlewaretoken'] = resp.cookies.get('csrftoken')
-            resp = self._request_session.post(url=self._auth_url, data=auth_details)
-            self._is_authenticated = resp.ok
+        # authenticate if credentials are already set
+        if not self._is_authenticated and (self._auth_credentials and self._auth_url):
+            self.authenticate()
 
-            if self._is_authenticated:
-                self.logger.log_info('AUTHENTICATED!!!\n')
-            else:
-                self.logger.log_error('AUTHENTICATION FAILED!!!\n')
-
-        if request_limit_setting is None:
+        if self.request_limit_setting is None:
             self.logger.log_info('GETTING --> %s \n' % url)
             response = self._request_session.get(url, headers=headers)
             if response.status_code != 200:
-                self.logger.log_warning(f"REQUEST GOT RESPONSE CODE -> {response.status_code} \n")
+                self.logger.log_error(f"REQUEST GOT RESPONSE CODE -> {response.status_code} \n")
                 return self._make_request(url)
             return response
 
         else:
-            if request_limit_setting.can_make_requests == True:
-                self.logger.log_info("NUMBER OF AVAILABLE REQUEST: %s\n" % str(request_limit_setting.no_of_available_request))
+            if self.request_limit_setting.can_make_requests == True:
+                self.logger.log_info("NUMBER OF AVAILABLE REQUEST: %s\n" % str(self.request_limit_setting.no_of_available_request))
                 self.logger.log_info('GETTING --> %s \n' % url)
                 response = self._request_session.get(url)
 
                 if response.status_code == 200:
                     self.logger.log_info('SUCCESS: REQUEST OK \n')
-                    request_limit_setting.request_made()
+                    self.request_limit_setting.request_made()
                     return response
                 else:
                     self.logger.log_warning(f"REQUEST GOT RESPONSE CODE -> {response.status_code} \n")
-                    request_limit_setting.request_made()
-                    if request_limit_setting.can_retry and response.status_code not in [403, 404]:
-                        request_limit_setting.got_response_error()
+                    self.request_limit_setting.request_made()
+                    if self.request_limit_setting.can_retry and response.status_code not in [403, 404]:
+                        self.request_limit_setting.got_response_error()
                         self.logger.log_info('RETRYING... \n')
-                        time.sleep(request_limit_setting.pause_duration * 5)
-                        return self._make_request(url, request_limit_setting)
+                        time.sleep(self.request_limit_setting.pause_duration * 5)
+                        return self._make_request(url)
 
-                    elif not request_limit_setting.can_retry:
+                    elif not self.request_limit_setting.can_retry:
                         self.logger.log_warning("MAXIMUM NUMBER OF RETRIES REACHED! MOVING ON >>> \n")
-                        request_limit_setting.reset_max_retry()
-                    return None
-
+                        self.request_limit_setting.reset_max_retry()
             else:
                 self.logger.log_info('RETRYING... \n')
-                time.sleep(request_limit_setting.pause_duration)
-                return self._make_request(url, request_limit_setting)
+                time.sleep(self.request_limit_setting.pause_duration)
+                return self._make_request(url)
+        return None
+
+    
+    def _translate_content(self, content: str | bytes) -> str | bytes:
+        '''
+        Translates the content given using the translator set for the scraper.
+
+        Returns the translated content.
+
+        Args:
+            content (str | bytes): The content to translate.
+        '''
+        if not isinstance(content, (str, bytes)):
+            raise ValueError("Invalid type for `content`")
+        is_bytes = isinstance(content, bytes)
+
+        self.logger.log_info('TRANSLATING CONTENT...\n')
+        soup = BeautifulSoup(content, self.parser)
+        with ThreadPoolExecutor() as executor:
+            for list_item in slice_list(soup.findAll(self.translator._translatable_elements), 100):
+                executor.map(self.translator.translate_soup_element, list_item)
+                time.sleep(1.50)
+        content = soup.prettify()
+        # NOT FUNCTIONAL FOR NOW
+        # content = self.translator.translate_html(content, target_lang=self.translator.target_language)
+        self.logger.log_info("CONTENT TRANSLATED!\n")
+
+        # re-encode the content if the initial content was in bytes
+        if is_bytes:
+            self.logger.log_info('RE-ENCODING CONTENT...\n')
+            content = content.encode('utf-8')
+        return content
     
 
     def _create_file(self, filename: str, storage_path: str, content: str | bytes, 
@@ -756,67 +663,42 @@ class BS4WebScraper:
             translate (bool, optional): Whether to translate the content to the encoding specified. Defaults to True.
 
         '''
-        
         if not isinstance(filename, str):
             raise ValueError("Invalid argument type for `filename`")
-
         if not isinstance(storage_path, str):
             raise ValueError("Invalid argument type for `storage_path`")
-
         if not isinstance(create_mode, str):
             raise ValueError("Invalid argument type for `create_mode`")
-
         if not isinstance(content, (bytes, str)):
             raise ValueError('Argument `content` can only be bytes or str.')
-
         if not isinstance(encoding, str) and encoding is not None:
             raise ValueError('Argument `encoding` can only be NoneType or str.')
-
         if create_mode not in ['x', 'xb', 'w', 'wb']:
             raise ValueError("`%s` is not an allowed mode. Allowed modes: 'x', 'xb', 'w', 'wb'." % create_mode)
-
+        if create_mode in ['xb', 'wb'] and isinstance(content, str):
+            raise ValueError("`create_mode` specified is a byte mode. content provide is of type str not bytes")
+        if create_mode in ['x', 'w'] and isinstance(content, bytes):
+            raise ValueError("`create_mode` specified is a string mode. content provide is of type bytes not str")
         if create_mode in ["x", "w"] and encoding is None:
             raise ValueError("Encoding cannot be NoneType when `create_mode` is 'x'.")
 
-        # Translate
-        if translate and (self.translator_target_language and filename.endswith('.html')):
-            self.logger.log_info('TRANSLATING CONTENT...\n')
-            soup = BeautifulSoup(content, self.parser)
-            with ThreadPoolExecutor() as executor:
-                for list_item in slice_list(soup.findAll(self._translatable_elements), 50):
-                    executor.map(self._translate_soup_element, list_item)
-                    time.sleep(2)
-            
-            content = soup.prettify()
-            # NOT FUNCTIONAL FOR NOW
-            # content = self._translate_html(content, target_lang=self.translator_target_language)
-            self.logger.log_info("CONTENT TRANSLATED!\n")
+        # Translate if necessary
+        if translate and (self.translator.target_language and filename.endswith('.html')):
+            content = self._translate_content(content)
 
-            if create_mode in ['xb', 'wb'] and isinstance(content, str):
-                self.logger.log_info('RE-ENCODING CONTENT...\n')
-                content = content.encode('utf-8')
-
-        base_storage_dir = self.base_storage_dir
-        write_mode = "w"
-        read_mode = "r"
-        if create_mode.endswith('b'):
-            write_mode = "wb"
-            read_mode = "rb"
+        # Set the correct mode for reading and writing based on the create_mode
+        write_mode, read_mode = ("wb", "rb") if create_mode.endswith('b') else ("w", "r")
 
         try:
-            dir_path = f"{base_storage_dir}\{storage_path}"
-            try:
-                os.makedirs(dir_path, exist_ok=True)
-            except FileExistsError:
-                pass
-
+            dir_path = f"{self.base_storage_dir}\{storage_path}"
+            os.makedirs(dir_path, exist_ok=True)
             with open(f"{dir_path}\{filename}", create_mode, encoding=encoding) as f:
                 if f.writable():
                     f.write(content)
+                    self.logger.log_info(f"{'CREATED' if create_mode in ['xb', 'x'] else 'WROTE'} FILE -> {dir_path}\{filename} \n")
                     f.close()
                     file = open(f"{dir_path}\{filename}", read_mode, encoding=encoding)
                     return file
-
                 else:
                     raise Exception('File does not support write')
         
@@ -824,7 +706,7 @@ class BS4WebScraper:
             return self._create_file(filename, storage_path, content, write_mode, encoding)
             
 
-    def _parse_storage_path(self, url_obj: Url) -> str:
+    def _parse_storage_path(self, url_obj: Url, remove_str: str | None = None) -> str:
         '''
         Returns a suitable storage path from a Url.
 
@@ -833,8 +715,11 @@ class BS4WebScraper:
         '''
         if not isinstance(url_obj, Url):
             raise ValueError('`url_obj` should be of type Url')
+        if remove_str and not isinstance(remove_str, str):
+            raise ValueError('`remove_str` should be of type str')
 
         url_path = url_obj.path or ''
+        url_path = url_path.replace(remove_str, '') if remove_str else url_path
         return url_path.replace('/', '\\')
 
 
@@ -850,19 +735,345 @@ class BS4WebScraper:
             raise ValueError('`tag_name` should be of type str')
         tag_name = tag_name.lower()
 
-        if tag_name in ['img', 'script', 'video']:
+        if tag_name in ['audio', 'iframe', 'track', 'img', 'source', 'script', 'embed', 'video']:
             return 'src'
-        if tag_name in ['use', 'link']:
+        if tag_name in ['link', 'a', 'use']:
             return 'href'
         
 
-    def _get_soup_element(self, element: Tag, element_tag_name: str, src: str) -> None:
+    def download_url(self, url: str, save_as: str | None = None, save_to: str | None = None, check_ext: bool = True):
+        '''
+        Download file from the given url. Saves the file in a storage path in `self.base_storage_dir`.
+
+        Returns the storage path of the downloaded file.
+
+        Args:
+            - url (str): Url to be downloaded.
+            - save_as Optional[str]: Name of the file to be downloaded or name with which the file should be saved.
+            - save_to Optional[str]: Path to the directory where the file should be saved in `self.base_storage_dir`.
+            - check_ext (bool, optional): Whether to check for extension in the url and use it for filename validation. Defaults to True.
+        
+        #### NOTE: ::
+            - #### If `save_as` is not provided, the filename will be extracted from the url.
+            - #### If `save_to` is not provided, then `save_to` will automatically be the url path.
+            - #### If the url you want to download from does not have an filename with extension, you should set `check_ext` to False and provide a value for `save_as`.
+            
+            An example of a url with a filename and extension is: https://example.com/style.css with 'style' as the name and '.css' as the extension.
+            But a url like https://example.com/ does not have a filename with extension, you should provide a `save_as` name in this case, if not the 
+            download may fail.
+
+            - #### If the url already has a filename with extension, but you want to save the file with a different name, you can provide a value for `save_as` and set `check_ext` to False. 
+            Just be careful as this may lead to saving files with no or incorrect file extensions.
+
+        #### Example Usage: ::
+            >>> bs4_scraper.download_url(url="https://example.com/", save_as="example.html",
+                                        save_to="/examples", check_ext="False")
+        ''' 
+        if not isinstance(check_ext, bool):
+            raise ValueError('`check_ext` should be of type bool')
+        if save_to and not isinstance(save_to, str):
+            raise ValueError('`save_to` should be of type str')
+        if not url:
+            raise ValueError('`url` is required.')
+        if not isinstance(url, str):
+            raise ValueError('`url` should be of type str')
+        url_obj = parse_url(url)
+        if url_obj.scheme not in ['http', 'https']:
+            raise ValueError('Only http and https urls are allowed.')
+        if not url_obj.netloc:
+            raise ValueError('Invalid url.')
+    
+        url_based_name, url_based_ext = os.path.splitext((url_obj.path or '').split('/')[-1])
+        if check_ext and not url_based_ext:
+            raise ValueError('Invalid url. No extension found in url. The url may be incorrect.')
+        filename = f"{url_based_name}{url_based_ext}"
+
+        if save_as:
+            if not isinstance(save_as, str):
+                raise ValueError('`save_as` should be of type str')
+            save_as_name, save_as_ext = os.path.splitext(save_as)
+            if not (save_as_name and save_as_ext):
+                raise ValueError('Invalid `save_as` name.')
+            if check_ext and save_as_ext != url_based_ext:
+                raise ValueError('Invalid extension! `save_as` extension does not match the extension in the url.')
+            filename = f"{save_as_name}{save_as_ext}"
+
+        if not filename:
+            raise ValueError('`filename` seems to be empty. Please check the url or provide a `save_as` name.')
+
+        has_query_params = False
+        response = None
+        downloaded_file = None
+        storage_path = save_to or ''
+        # check if element src has query params
+        if url_obj.query:
+            has_query_params = True
+        if not save_to:
+            storage_path = self._parse_storage_path(url_obj, remove_str=f"{url_based_name}{url_based_ext}")
+            # Clean up storage path
+            storage_path = storage_path.replace(filename, '') if storage_path.endswith(f"{url_based_name}{url_based_ext}") else storage_path
+            storage_path = storage_path[:-1] if storage_path.endswith('\\') else storage_path
+            storage_path = storage_path[1:] if storage_path.startswith('\\') else storage_path        
+                
+        if has_query_params:
+            filename = generate_unique_filename(filename)
+        s_path = f"{self.base_storage_dir}\{storage_path}\{filename}"
+
+        if not has_query_params or (url_obj.query not in self.url_query_params):
+            # check if file already exists
+            if os.path.exists(s_path) is False:
+                response = self._make_request(url)
+            else:
+                self.logger.log_info("`%s` ALREADY EXISTS! \n" % s_path)
+
+        if response:
+            downloaded_file = self._create_file(filename=filename, storage_path=storage_path, content=response.content)
+            if downloaded_file:
+                self.logger.log_info("`%s` DOWNLOADED! \n" % url)
+                if has_query_params:
+                    self.url_query_params.append(url_obj.query)  
+                return s_path, downloaded_file, filename
+
+        return None, None, filename
+        
+
+    def download_urls(self, urls: Iterable[Dict[str, str]],
+                            save_to: str | None = None, check_ext: bool = True, fast_download: bool = False):
+        '''
+        Download files from the given urls using the `download_url` method. Saves the files in a storage path in `self.base_storage_dir`.
+
+        Returns the storage path of the downloaded files.
+
+        Args:
+            - urls (List[Dict[str, str]]): List of urls to be downloaded. The url in the list should be of type dict[str, str].
+            - save_to Optional[str]: Path to the directory where the file should be saved in `self.base_storage_dir`.
+            - check_ext (bool, optional): Whether to check for extension in the url and use it for filename validation. Defaults to True.
+            Check the doc string of `download_url` for more info on setting this value.
+            - fast_download (bool, optional): Whether to download the urls in parallel. Defaults to False. 
+            If the number or urls exceed 200 then fast download wont be used to avoid sending high frequency requests to the server.
+
+        #### Example Usage: ::
+            >>> urls = [
+                    {'url': 'https://www.example.com/', 'save_as': 'site.html'},
+                    {'url': 'https://www.example.com/image2.jpg', 'save_as': ''},
+                    {'url': 'https://www.example.com/image3.jpg', 'save_as': 'image3.jpg'},
+                ]
+            >>> bs4_scraper.download_urls(urls=urls, save_to='images', fast_download=True)
+        ''' 
+        if not urls:
+            raise ValueError('`urls` is required.')
+        if not isinstance(urls, Iterable):
+            raise ValueError('`urls` should be of type Iterable[dict[str, str]]')
+        
+        urls = list(filter(lambda url: isinstance(url, dict) and any(url), urls))
+
+        if len(urls) < 1:
+            raise ValueError("No valid url was found in `urls`")
+
+        results = []
+        params = {'save_to': save_to, 'check_ext': check_ext}
+
+        urls_download_params = map(lambda dict: {**params, **dict}, urls) 
+        urls_download_params = list(urls_download_params)
+
+        if fast_download and len(urls) <= 200:
+            self.logger.log_info("FAST DOWNLOAD STARTED...\n")
+            with ThreadPoolExecutor() as executor:
+                values = executor.map(lambda kwargs: self.download_url(**kwargs), urls_download_params)
+            results.extend(values)
+            return results
+
+        elif fast_download and len(urls) > 200:
+            self.logger.log_warning("CANNOT USE FAST DOWNLOAD! TOO MANY URLS. FALLING BACK TO NORMAL DOWNLOAD.\n")
+
+        self.logger.log_info("DOWNLOADS STARTED...")
+        values = map(lambda kwargs: self.download_url(**kwargs), urls_download_params)
+        results.extend(values)
+
+        if results:
+            self.logger.log_info("DOWNLOADS FINISHED!\n")
+        else:
+            self.logger.log_info("NOTHING DOWNLOADED!\n")
+        return results
+
+
+    def get_links(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+        """
+        Gets all the links from the given url.
+
+        Returns a list of links and saves the links to a file if `save_to_file` is set to True.
+
+        Args:
+            - url (str): Url to get the links from.
+            - save_to_file (bool, optional): Whether to save the links to a file. Defaults to False.
+            - file_format (str, optional): File format to save the links to. Defaults to "csv".
+            Available file formats are: csv, json, txt, xlsx.
+        """
+        if not isinstance(save_to_file, bool):
+            raise ValueError("Invalid type for `save_as_file`")
+        if not isinstance(file_format, str):
+            raise ValueError("Invalid type for `save_as`")
+        result = []
+        response = self._make_request(url)
+        if response:
+            soup = BeautifulSoup(response.content, self.parser)
+            links = soup.find_all('a')
+            links = list(filter(lambda link: link.get('href') and parse_url(link.get('href')).netloc, links))
+            with ThreadPoolExecutor() as executor:
+                values = executor.map(lambda arg: self._get_soup_link(*arg), list(map(lambda link: (link, False), links)))
+                result.extend(values)
+        return result
+
+
+    def get_styles(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+        """
+        Gets all the styles from the given url.
+
+        Returns a list of styles and saves the styles to a file if `save_to_file` is set to True.
+
+        Args:
+            - url (str): Url to get the styles from.
+            - save_to_file (bool, optional): Whether to save the styles to a file. Defaults to False.
+            - file_format (str, optional): File format to save the styles to. Defaults to "csv".
+            Available file formats are: csv, json, txt, xlsx.
+        """
+        if not isinstance(save_to_file, bool):
+            raise ValueError("Invalid type for `save_as_file`")
+        if not isinstance(file_format, str):
+            raise ValueError("Invalid type for `save_as`")
+        result = []
+        response = self._make_request(url)
+        if response:
+            soup = BeautifulSoup(response.content, self.parser)
+            styles = soup.find_all('link', {'rel': 'stylesheet'})
+            styles = list(filter(lambda style: style.get('href'), styles))
+            with ThreadPoolExecutor() as executor:
+                values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda style: (style, 'href', False), styles)))
+                result.extend(values)
+        return result
+
+
+    def get_scripts(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+        """
+        Gets all the scripts from the given url.
+
+        Returns a list of scripts and saves the scripts to a file if `save_to_file` is set to True.
+
+        Args:
+            - url (str): Url to get the scripts from.
+            - save_to_file (bool, optional): Whether to save the scripts to a file. Defaults to False.
+            - file_format (str, optional): File format to save the scripts to. Defaults to "csv".
+            Available file formats are: csv, json, txt, xlsx.
+        """
+        if not isinstance(save_to_file, bool):
+            raise ValueError("Invalid type for `save_as_file`")
+        if not isinstance(file_format, str):
+            raise ValueError("Invalid type for `save_as`")
+        result = []
+        response = self._make_request(url)
+        if response:
+            soup = BeautifulSoup(response.content, self.parser)
+            scripts = soup.find_all('script')
+            scripts = list(filter(lambda script: script.get('src'), scripts))
+            with ThreadPoolExecutor() as executor:
+                values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda script: (script, 'src', False), scripts)))
+                result.extend(values)
+        return result
+
+    
+    def get_fonts(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+        """
+        Gets all the fonts from the given url.
+
+        Returns a list of fonts and saves the fonts to a file if `save_to_file` is set to True.
+
+        Args:
+            - url (str): Url to get the fonts from.
+            - save_to_file (bool, optional): Whether to save the fonts to a file. Defaults to False.
+            - file_format (str, optional): File format to save the fonts to. Defaults to "csv".
+            Available file formats are: csv, json, txt, xlsx.
+        """
+        if not isinstance(save_to_file, bool):
+            raise ValueError("Invalid type for `save_as_file`")
+        if not isinstance(file_format, str):
+            raise ValueError("Invalid type for `save_as`")
+        result = []
+        response = self._make_request(url)
+        if response:
+            soup = BeautifulSoup(response.content, self.parser)
+            fonts = soup.find_all('link', {'rel': 'preload'})
+            fonts += soup.find_all('link', {'as': 'font'})
+            # filter out by font file extensions and href
+            font_ext = ['woff', 'woff2', 'ttf', 'otf', 'eot', 'svg']
+            fonts = list(filter(lambda font: font.get('href') and parse_url(font.get('href')).path.split('.')[-1] in font_ext, fonts))
+            with ThreadPoolExecutor() as executor:
+                values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda font: (font, 'href', False), fonts)))
+                result.extend(values)
+        return result
+
+    
+    def get_images(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+        """
+        Gets all the images from the given url.
+
+        Returns a list of images and saves the images to a file if `save_to_file` is set to True.
+
+        Args:
+            - url (str): Url to get the images from.
+            - save_to_file (bool, optional): Whether to save the images to a file. Defaults to False.
+            - file_format (str, optional): File format to save the images to. Defaults to "csv".
+            Available file formats are: csv, json, txt, xlsx.
+        """
+        if not isinstance(save_to_file, bool):
+            raise ValueError("Invalid type for `save_as_file`")
+        if not isinstance(file_format, str):
+            raise ValueError("Invalid type for `save_as`")
+        result = []
+        response = self._make_request(url)
+        if response:
+            soup = BeautifulSoup(response.content, self.parser)
+            images = soup.find_all('img')
+            images = list(filter(lambda image: image.get('src'), images))
+            with ThreadPoolExecutor() as executor:
+                values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda image: (image, 'src', False), images)))
+                result.extend(values)
+        return result
+
+
+    def get_videos(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+        """
+        Gets all the videos from the given url.
+
+        Returns a list of videos and saves the videos to a file if `save_to_file` is set to True.
+
+        Args:
+            - url (str): Url to get the videos from.
+            - save_to_file (bool, optional): Whether to save the videos to a file. Defaults to False.
+            - file_format (str, optional): File format to save the videos to. Defaults to "csv".
+            Available file formats are: csv, json, txt, xlsx.
+        """
+        if not isinstance(save_to_file, bool):
+            raise ValueError("Invalid type for `save_as_file`")
+        if not isinstance(file_format, str):
+            raise ValueError("Invalid type for `save_as`")
+        result = []
+        response = self._make_request(url)
+        if response:
+            soup = BeautifulSoup(response.content, self.parser)
+            videos = soup.find_all('video')
+            videos = list(filter(lambda video: video.get('src'), videos))
+            with ThreadPoolExecutor() as executor:
+                values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda video: (video, 'src', False), videos)))
+                result.extend(values)
+        return result
+
+
+    def _get_soup_element(self, element: Tag, src: str, download: bool = True):
         '''
         Get the element src and download the file.
 
         Args:
             element (Tag): Element to be checked.
-            element_tag_name (str): Element tag name.
             src (str): Element src attribute.
         
         '''
@@ -870,12 +1081,9 @@ class BS4WebScraper:
             raise ValueError('`element` should be of type Tag')
 
         element_src: str = element.attrs.get(src)
-        if element_tag_name.lower() == 'use':
+        if element.name.lower() == 'use':
             element_src = element_src.split('#')[0]
 
-        response = None
-        has_query_params = False
-        base_storage_dir = self.base_storage_dir
         _base_url = self._base_url
 
         if element_src:
@@ -884,18 +1092,11 @@ class BS4WebScraper:
                 element_src = element_src.replace('//', '/')
             
             url_obj = parse_url(element_src)
-            element_name = url_obj.path.split('/')[-1]
-
-            # check if element src has query params
-            if url_obj.query:
-                has_query_params = True
-
-            if (url_obj.scheme and url_obj.host):
+            # Get the actual url
+            if (url_obj.scheme and url_obj.netloc):
                 actual_url = url_obj.url
-
-            elif url_obj.host and not url_obj.scheme:
+            elif url_obj.netloc and not url_obj.scheme:
                 actual_url = f"http://{url_obj.url}"
-
             else:
                 actual_url = urljoin(_base_url, url_obj.url)
 
@@ -903,29 +1104,17 @@ class BS4WebScraper:
             _base_url_obj = parse_url(_base_url)
 
             # Only scrape internal links, that is, links associated with the website being scraped only.
-            if (_base_url_obj.host and actual_url_obj.host) and _base_url_obj.host in actual_url_obj.host:
-                new_storage_path = self._parse_storage_path(actual_url_obj).replace(element_name, '')
-                
-                if has_query_params:
-                    element_name = self._generate_unique_filename(element_name)
-                full_path = f"{base_storage_dir}\{new_storage_path}\{element_name}"
+            if download and (_base_url_obj.netloc and actual_url_obj.netloc) and _base_url_obj.netloc in actual_url_obj.netloc:
+                storage_path, _ = self.download_url(url=actual_url, check_ext=False)
 
-                if not has_query_params or (url_obj.query not in self.url_query_params):
-                    if os.path.exists(full_path) is False:
-                        response = self._make_request(actual_url)
-                    else:
-                        self.logger.log_info("`%s` ALREADY EXISTS! \n" % full_path)
-
-                if response:
-                    _ = self._create_file(filename=element_name, storage_path=new_storage_path, content=response.content)
-                    if has_query_params:
-                        self.url_query_params.append(url_obj.query) 
-
-                    # change the element's src to be compatible with the scraped website
-                    element['href'] = full_path.replace('\\', '/')
+                # change the element's src to be compatible with the scraped website
+                if storage_path:
+                    element[src] = storage_path.replace('\\', '/')
+            elif not download:
+                return actual_url_obj.url
         
 
-    def _get_associated_files(self, soup: BeautifulSoup) -> None:
+    def _get_associated_files(self, soup: BeautifulSoup):
         '''
         Scrapes all the soup tags present in `self.scrapable_tags`
         
@@ -953,33 +1142,10 @@ class BS4WebScraper:
                 for element in elements:
                     src = self._get_element_src_by_tag_name(tag_name)
                     if element.attrs.get(src):
-                        self._get_soup_element(element, tag_name, src)
+                        self._get_soup_element(element, src)
 
 
-    def _generate_unique_id(self) -> str:
-        '''Returns a random string of random length'''
-        sample = list('0123456789' + string.ascii_lowercase)
-        id = "".join(random.choices(sample, k=random.randint(4, 6)))
-        return id
-
-
-    def _generate_unique_filename(self, old_filename: str) -> str:
-        '''
-        Returns the old filename but with a random id to make it unique.
-
-        Args:
-            old_filename (str): Old filename to be modified.
-        
-        '''
-        if not isinstance(old_filename, str):
-            raise ValueError('`old_filename` should be of type str')
-
-        name, ext = os.path.splitext(old_filename)
-        unique_filename = f"{name}{self._generate_unique_id()}{ext}"
-        return unique_filename
-
-
-    def _get_soup_link(self, link: Tag) -> None:
+    def _get_soup_link(self, link: Tag, download: bool = True):
         '''
         Get the link href and download the file
         
@@ -989,30 +1155,22 @@ class BS4WebScraper:
         '''
         if not isinstance(link, Tag):
             raise ValueError('`link` should be of type Tag')
+        if not link.name == 'a':
+            raise ValueError('`link` should be an HTML "a" tag')
 
         link_href = link.get('href', None)
         actual_url = None
-        new_storage_path = None
-        response = None
-        has_query_params = False
-
+        storage_path = None
         html_filename = self.html_filename
-        base_storage_dir = self.base_storage_dir
         _base_url = self._base_url
         
         if link_href:
             url_obj = parse_url(link_href)
-
-            # check if link href has query params
-            if url_obj.query:
-                has_query_params = True
-
-            if (url_obj.scheme and url_obj.host):
+            # Get actual url
+            if (url_obj.scheme and url_obj.netloc):
                 actual_url = url_obj.url
-
-            elif url_obj.host and not url_obj.scheme:
+            elif url_obj.netloc and not url_obj.scheme:
                 actual_url = f"http://{url_obj.url}"
-
             else:
                 actual_url = urljoin(_base_url, url_obj.url)
 
@@ -1020,43 +1178,19 @@ class BS4WebScraper:
             _base_url_obj = parse_url(_base_url)
 
             # Only scrape internal links, that is, links associated with the website being scraped only.
-            if (_base_url_obj.host and actual_url_obj.host) and _base_url_obj.host in actual_url_obj.host:
-                new_storage_path = self._parse_storage_path(actual_url_obj)
-            
-                if has_query_params:
-                    html_filename = self._generate_unique_filename(html_filename)
-                    
-                full_path = f"{base_storage_dir}\{new_storage_path}\{html_filename}"
+            if download and (_base_url_obj.netloc and actual_url_obj.netloc) and _base_url_obj.netloc in actual_url_obj.netloc:
+                storage_path, new_file = self.download_url(url=actual_url, save_as=html_filename, check_ext=False)
+                if new_file:
+                    new_soup = BeautifulSoup(new_file.read(), self.parser)
+                    self._get_associated_files(new_soup)
 
-                if not has_query_params or (url_obj.query not in self.url_query_params):
-                    if os.path.exists(full_path) is False:
-                        response = self._make_request(actual_url)
-                    else:
-                        self.logger.log_info("`%s` ALREADY EXISTS! \n" % full_path)
+                # change the link's href to be compatible with the scraped website
+                if storage_path:
+                    link['href'] = storage_path.replace('\\', '/')
+            elif not download:
+                return actual_url_obj.url
 
-                if response:
-                    filename = html_filename
-                    name, ext = os.path.splitext((actual_url_obj.path or '').split('/')[-1])
-                    if ext and ext != '.html':
-                        filename = f'{name}{ext}'
-
-                    if ext and ext == '.html':
-                        new_file = self._create_file(filename=filename, storage_path=new_storage_path, 
-                                        content=response.text, create_mode='x', encoding='utf-8')
-                    else:
-                        new_file = self._create_file(filename=filename, storage_path=new_storage_path, content=response.content)
-                
-                    if new_file:
-                        if has_query_params:
-                            self.url_query_params.append(url_obj.query) 
-
-                        new_soup = BeautifulSoup(new_file.read(), self.parser)
-                        self._get_associated_files(new_soup)
-
-                    # change the link's href to be compatible with the scraped website
-                    link['href'] = full_path.replace('\\', '/')
-
-        return (actual_url, new_storage_path, html_filename)
+        return (actual_url, storage_path, html_filename)
 
 
 

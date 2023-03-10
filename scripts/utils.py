@@ -1,7 +1,44 @@
+"""
+DESCRIPTION: ::
+    Utility functions for the bs4_web_scraper package.
+"""
+
 import logging
 import time
 import os
-from typing import List
+import random
+import string
+from typing import List, Any
+
+
+# DEFAULT USER-AGENTS THAT CAN BE USED IN PLACE OF THE RANDOM USER-AGENTS
+USER_AGENTS = [
+   "Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148",
+   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36 Edg/109.0.1518.78",
+]
+
+
+def generate_unique_id() -> str:
+    '''Returns a random string of random length'''
+    sample = list('0123456789' + string.ascii_lowercase)
+    id = "".join(random.choices(sample, k=random.randint(4, 6)))
+    return id
+
+
+def generate_unique_filename(old_filename: str) -> str:
+    '''
+    Returns the old filename but with a random id to make it unique.
+
+    Args:
+        old_filename (str): Old filename to be modified.
+    
+    '''
+    if not isinstance(old_filename, str):
+        raise ValueError('`old_filename` should be of type str')
+
+    name, ext = os.path.splitext(old_filename)
+    unique_filename = f"{name}{generate_unique_id()}{ext}"
+    return unique_filename
 
 
 def slice_list(_list: List, slice_size: int) -> list:
@@ -37,18 +74,42 @@ def get_current_time() -> str:
     '''Returns the current time in the format: 12:12:12 (UTC)'''
     return time.strftime("%H:%M:%S (%Z)", time.gmtime())
 
+
+def generate_random_user_agents() -> list:
+    '''Generates and returns three random and simple header user agents.'''
+    nums = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+
+    random_agent1 = f"Mozilla/5.0 (iPad; CPU OS 12_2 like Mac OS X) AppleWebKit/{''.join(random.sample(nums, k=3))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=2))} (KHTML, like Gecko) Mobile/15E148"
+    random_agent2 = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/10{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))} Edg/10{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=4))}.{''.join(random.sample(nums, k=1))} Safari/537.36"
+    random_agent3 = f"Mozilla/5.0 (Linux; Android 11; SAMSUNG SM-A207F) AppleWebKit/537.36 SamsungBrowser/19.0 (KHTML, like Gecko) Chrome/10{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))} Safari/{''.join(random.sample(nums, k=3))}.{''.join(random.sample(nums, k=2))} Edg/10{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=1))}.{''.join(random.sample(nums, k=4))}.{''.join(random.sample(nums, k=1))} Safari/537.36"
+    
+    user_agents = [
+        random_agent1,
+        random_agent2,
+        random_agent3,
+    ]
+    return user_agents
+
 class Logger:
     '''
     Logger class for logging messages to a file.
 
-    Args:
-        log_filename (str): The name of the log file to log messages to. Defaults to "log.log".
+    Parameters:
+    -----------
+    @param name (str): The name of the logger.
+
+    @param log_filename (str): The name of the log file to log messages to.
     
     '''
-    _level = logging.INFO
+    _base_level = logging.NOTSET
     _format: str = "%(asctime)s - %(levelname)s - %(message)s"
+    date_format: str = "%d/%m/%Y %H:%M:%S (%Z)"
+    file_mode: str = 'a'
+    to_console: str = False
 
-    def __init__(self, log_filename: str = 'log.log') -> None:
+    def __init__(self, name: str, log_filename: str) -> None:
+        if not isinstance(name, str):
+            raise ValueError('Invalid argument type for `name`')
         if not isinstance(log_filename, str):
             raise ValueError('Invalid argument type for `log_filename`')
 
@@ -57,13 +118,72 @@ class Logger:
             raise ValueError('Invalid extension type for log file')
         if not ext:
             log_filename = f"{log_filename}.log"
-
         self.filename = log_filename
 
-    def _update_basic_config(self) -> None:
-        '''Updates the basic config for the logger'''
-        logging.basicConfig(filename=self.filename, level=self._level, 
-                            format=self._format, datefmt="%d/%m/%Y %H:%M:%S (%Z)")
+        self._logger = logging.getLogger(name)
+
+
+    def __str__(self) -> str:
+        if self._logger.name:
+            return self._logger.name
+        return super().__str__()
+    
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        super().__setattr__(__name, __value)
+        self._update_config()
+
+    
+    def _to_console(self) -> None:
+        '''
+        Logs messages to the console.
+
+        If `self.to_console` is True, all subsequent log messages will be logged to the console.
+        '''
+        # set up logging to console
+        console = logging.StreamHandler()
+        console.setLevel(self._base_level)
+        # set a format which is simpler for console use
+        formatter = logging.Formatter(fmt=self._format, datefmt=self.date_format.replace('(%Z)', '(%z)'))
+        console.setFormatter(formatter)
+        # add the handler to the logger object and remove any existing handlers
+        handlers = self._logger.handlers
+        for h in handlers:
+            self._logger.removeHandler(h)
+        self._logger.addHandler(console)
+
+
+    def _update_config(self) -> None:
+        '''Updates the logger's configuration.'''
+        logging.basicConfig(filename=self.filename, level=self._base_level, 
+                            format=self._format, datefmt=self.date_format,
+                            filemode=self.file_mode, force=True)
+        try:
+            self._to_console()
+        except:
+            pass
+
+
+    def set_base_level(self, level: str) -> None:
+        '''
+        Sets the logging level for the logger.
+
+        Args:
+            - level (str): The logging level to set the logger to.
+        '''
+        if not isinstance(level, str):
+            raise ValueError('`level` should be of type str')
+        match level.upper():
+            case "INFO":
+                self._base_level = logging.INFO
+            case "DEBUG":
+                self._base_level = logging.DEBUG
+            case "WARNING":
+                self._base_level = logging.WARNING
+            case "ERROR":
+                self._base_level = logging.ERROR
+            case "CRITICAL":
+                self._base_level = logging.CRITICAL
+
     
     def log(self, message: str, level: str | None = "INFO") -> None:
         '''
@@ -87,6 +207,10 @@ class Logger:
                 return self.log_warning(message)
             case "ERROR":
                 return self.log_error(message)
+            case "CRITICAL":
+                return self.log_critical(message)
+        return self.log_info(message)
+
 
     def log_info(self, message: str) -> None:
         '''Logs a message to a file using the INFO level'''
@@ -95,9 +219,8 @@ class Logger:
         if not isinstance(message, str):
             ValueError("`message` should be of type str")
         
-        self._level = logging.INFO
-        self._update_basic_config()
-        logging.info(msg=message)
+        self._update_config()
+        self._logger.info(msg=message)
     
     def log_debug(self, message: str) -> None:
         '''Logs a message to a file using the DEBUG level'''
@@ -106,9 +229,8 @@ class Logger:
         if not isinstance(message, str):
             ValueError("`message` should be of type str")
 
-        self._level = logging.DEBUG
-        self._update_basic_config()
-        logging.debug(msg=message)
+        self._update_config()
+        self._logger.debug(msg=message)
     
     def log_error(self, message: str) -> None:
         '''Logs a message to a file using the ERROR level'''
@@ -117,9 +239,8 @@ class Logger:
         if not isinstance(message, str):
             ValueError("`message` should be of type str")
             
-        self._level = logging.ERROR
-        self._update_basic_config()
-        logging.error(msg=message)
+        self._update_config()
+        self._logger.error(msg=message)
 
     def log_warning(self, message: str) -> None:
         '''Logs a message to a file using the WARNING level'''
@@ -128,9 +249,18 @@ class Logger:
         if not isinstance(message, str):
             ValueError("`message` should be of type str")
             
-        self._level = logging.WARNING
-        self._update_basic_config()
-        logging.warning(msg=message)
+        self._update_config()
+        self._logger.warning(msg=message)
+    
+    def log_critical(self, message: str) -> None:
+        '''Logs a message to a file using the CRITICAL level'''
+        if not message:
+            ValueError("`message` is a required argument")
+        if not isinstance(message, str):
+            ValueError("`message` should be of type str")
+            
+        self._update_config()
+        self._logger.critical(msg=message)
         
 
 
@@ -140,6 +270,8 @@ class RequestLimitSetting:
     '''
     #### BS4WebScraper requests limiting setting.
 
+    Parameters:
+    -----------
     @param int `request_count`: number of request that can be made before pausing requests.
 
     @param int `pause_duration`: number of seconds for which all requests will be paused before 
@@ -150,6 +282,8 @@ class RequestLimitSetting:
 
     @param Logger `logger`: `Logger` instance to be used to write logs.
 
+    Attributes:
+    -----------
     @attr bool `request_paused`: is True if requests are paused.
 
     @attr int `max_request_count_per_second`: returns the value provided for :param `request_count`.
@@ -197,6 +331,9 @@ class RequestLimitSetting:
         Args:
             message (str): The message to log
         '''
+        if not isinstance(message, str):
+            raise ValueError('Invalid type for `message`')
+            
         if self.logger:
             self.logger.log(message)
         else:
