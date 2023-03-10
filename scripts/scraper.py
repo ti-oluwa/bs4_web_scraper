@@ -25,9 +25,7 @@ from urllib3.util.url import parse_url, Url
 from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor
 
-from .utils import (Logger, RequestLimitSetting, slice_list, 
-                    get_current_time, generate_random_user_agents,
-                    generate_unique_filename)
+from .utils import (Logger, RequestLimitSetting, slice_list, generate_random_user_agents, generate_unique_filename)
 from .help import available_translation_engines
 from .translators import Translator
 
@@ -37,13 +35,14 @@ class BS4WebScraper:
     """
     ### BeautifulSoup4 web scraper class with support for authentication and translation.
 
-    #### Example: ::
+    #### Instantiation and Example Usage: ::
         >>> bs4_scraper = BS4WebScraper(parser='lxml', html_filename='google.html',
                             no_of_requests_before_pause=50, scrape_session_pause_duration='auto',
                             base_storage_dir='./google', storage_path='/', 
                             log_filename='google.log', ...)
         >>> bs4_scraper.scrape(url='https://www.google.com', scrape_depth=0)
             'google.html' saves to './google/google.html'
+            A log file 'google.log' is created in the './google' directory
 
 
     #### NOTE: On instantiation of the class, a new request session is created. This session is used to make all related requests.
@@ -71,7 +70,7 @@ class BS4WebScraper:
     which can either to lead to a 429 response code, Permission denied error or complete access block. Default is 20.
 
     @param int `scrape_session_pause_duration`: Number of second for which a pause is observed after the max request 
-    count has been reached before a reset. Defaults to "auto" but the minimum pause duration allowed is 3 seconds. When set to "auto", 
+    count has been reached before a reset. Defaults to "auto" but the minimum pause duration allowed is 5 seconds. When set to "auto", 
     the scraper decides the suitable pause duration based on `no_of_requests_before_pause`.
 
     @param int `max_no_of_retries`: Maximum number of times a failed request will be retried before moving on.
@@ -126,9 +125,11 @@ class BS4WebScraper:
     -----------
     @attr dict `supported_languages`: A dictionary of all languages supported by the chosen translation engine.
 
-    @attr str `_base_url`: The base URL of the website being scraped.
+    @attr str `_base_url`: The base url of the website being scraped. The base url is the url that will be used to construct the absolute url of all relative urls in a website.
 
     @attr int `_level_reached`: The depth or number of levels successfully scraped.
+
+    @attr int `max_no_of_threads`: Maximum number of threads to use for scraping. Defaults to 10.
 
     @attr list[str] `scrapable_tags`: A list of HTML element tags the web scraper is permitted to scrape. By default, the web scraper is permitted
     to scrape all supported HTML element tags.
@@ -170,20 +171,20 @@ class BS4WebScraper:
     _auth_credentials: Dict[str, str] = None
     _is_authenticated: bool = False
     _level_reached: int = 0
+    max_no_of_threads: int = 10
     _request_session: requests.Session = requests.Session()
     _request_user_agent: str = None
-    url_query_params: List = []
+    url_query_params: Dict = {}
     translator: Translator = Translator()
-    
     scrapable_tags = [
-                    'script', 'link|{"rel": "stylesheet"}', 'img', 'use', 
-                    'video', 'link|{"as": "font"}', 'link|{"rel": "preload"}',
-                    'link|{"rel": "shortcut"}', 'link|{"rel": "icon"}',
-                    'link|{"rel": "shortcut icon"}', 'link|{"rel": "apple-touch-icon"}',
-                    'link|{"type": "image/x-icon"}', 'link|{"type": "image/png"}',
-                    'link|{"type": "image/jpg"}', 'link|{"type": "image/jpeg"}',
-                    'link|{"type": "image/svg"}', 'link|{"type": "image/webp"}',
-                ]
+        'script', 'link|{"rel": "stylesheet"}', 'img', 'use', 
+        'video', 'link|{"as": "font"}', 'link|{"rel": "preload"}',
+        'link|{"rel": "shortcut"}', 'link|{"rel": "icon"}',
+        'link|{"rel": "shortcut icon"}', 'link|{"rel": "apple-touch-icon"}',
+        'link|{"type": "image/x-icon"}', 'link|{"type": "image/png"}',
+        'link|{"type": "image/jpg"}', 'link|{"type": "image/jpeg"}',
+        'link|{"type": "image/svg"}', 'link|{"type": "image/webp"}',
+    ]
 
 
     def __init__(self, parser: str = 'lxml', html_filename: str = "index.html", 
@@ -211,9 +212,9 @@ class BS4WebScraper:
         if isinstance(scrape_session_pause_duration, str) and scrape_session_pause_duration != 'auto':
             raise ValueError('The only accepted string value for `scrape_session_pause_duration` is `auto`.')
         if scrape_session_pause_duration == 'auto':
-            scrape_session_pause_duration = math.ceil((3 / 20) * no_of_requests_before_pause)
-        if scrape_session_pause_duration < 3:
-            raise Exception("`scrape_session_pause_duration` cannot be less than 3 seconds")
+            scrape_session_pause_duration = max(math.ceil(0.542 * no_of_requests_before_pause), 5)
+        # if scrape_session_pause_duration < 5:
+        #     raise Exception("`scrape_session_pause_duration` cannot be less than 5 seconds")
         if log_filename and not isinstance(log_filename, str):
             raise ValueError('`log_filename` should be of type str')
 
@@ -253,7 +254,23 @@ class BS4WebScraper:
                                                             self.max_no_of_retries, self.logger)
 
 
-    def _get_base_url(self, url: str) -> str:
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        if __name == "_level_reached":
+            if not isinstance(__value, int):
+                raise ValueError(f"`{__name}` should be of type int")
+            if __value < 0:
+                raise ValueError(f"`{__name}` cannot be less than 0")
+        elif __name == "max_no_of_threads":
+            if not isinstance(__value, int):
+                raise ValueError(f"`{__name}` should be of type int")
+            if __value < 1:
+                raise ValueError(f"`{__name}` cannot be less than 1")
+            if __value > 10:
+                raise ValueError(f"`{__name}` cannot be greater than 10")
+        return super().__setattr__(__name, __value)
+
+
+    def get_base_url(self, url: str) -> str:
         '''
         Returns a base url containing only the host, scheme and port
 
@@ -269,6 +286,17 @@ class BS4WebScraper:
 
         new_url_obj = Url(scheme=url_obj.scheme, host=url_obj.host)
         return new_url_obj.url
+
+
+    def set_base_url(self, url: str) -> None:
+        '''
+        Sets the base url. The base url is the url that will be used to construct the absolute url of a relative url.
+
+        Args:
+            url (str): The url to be parsed. The url should be of the format `http://www.example.com:80/path/to/resource?query=string`,
+            The base url will be `http://www.example.com:80`.
+        '''
+        self.base_url = self.get_base_url(url)
 
     
     def _validate_auth_credentials(self, credentials: Dict[str, str]) -> str:
@@ -330,7 +358,29 @@ class BS4WebScraper:
         self._auth_credentials = _credentials
 
 
-    def _scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None = None, translate_to: str = None) -> None:
+    def _get_suitable_no_threads(self, no_of_items: int) -> int:
+        '''
+        Calculates the number of threads to use for the current scraping session based on the 
+        `request_limit_setting.pause_duration` and the no of items.
+
+        Returns the number of threads to use.
+
+        Args:
+            no_of_items (int): The number of items to be scraped.
+        '''
+        try:
+            no_of_items = int(no_of_items)
+        except:
+            raise ValueError("`no_of_items` should be of type int")
+        if no_of_items <= 0:
+            raise ValueError("`no_of_items` should be greater than 0")
+                
+        no_of_threads = self.request_limit_setting.pause_duration // (self.request_limit_setting.max_request_count_per_second // self.request_limit_setting.pause_duration)
+        no_of_threads = math.floor(math.log10(no_of_items * no_of_threads))
+        no_of_threads = min(no_of_threads, self.max_no_of_threads)
+        return no_of_threads if no_of_threads > 0 else 1
+
+    def _scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None = None, translate_to: str | None = None) -> None:
         '''
         Main scraping method.
         
@@ -355,7 +405,7 @@ class BS4WebScraper:
 
         # set the base url of the website
         if self._level_reached == 0:
-            self._base_url = self._get_base_url(url)
+            self._base_url = self.get_base_url(url)
         if credentials:
             self.set_auth_credentials(credentials)
             
@@ -393,10 +443,17 @@ class BS4WebScraper:
 
         # get links
         if links:
+            self.logger.log_error(f"NO OF LINKS: {len(links)}")
             self.logger.log_info(f'~~~SCRAPING AT LEVEL {self._level_reached + 1}~~~\n')
-            for link in links:
-                page_link_detail = self._get_soup_link(link)
-                page_links_details.append(page_link_detail)
+            with ThreadPoolExecutor() as executor:
+                no_of_threads = self._get_suitable_no_threads(len(links))
+                self.logger.log_error(f'NO OF THREADS: {no_of_threads}')
+                for link_list in slice_list(links, no_of_threads):
+                    values = executor.map(self._get_soup_link, link_list)
+                    page_links_details.extend(values)
+            # for link in links:
+            #     page_link_detail = self._get_soup_link(link)
+            #     page_links_details.append(page_link_detail)
 
             if self._level_reached == 0:
                 self._level_reached += 1  
@@ -404,7 +461,7 @@ class BS4WebScraper:
         # Create new base file with updated link_href, script_src, image_src, href's etc.
         self.logger.log_info("REWRITING BASE HTML FILE WITH UPDATED ELEMENT ATTRIBUTES\n")
         self._create_file(filename=self._base_html_filename, storage_path=self.storage_path, 
-                            content=soup.prettify(formatter='html'), create_mode='w', 
+                            content=soup.prettify(), create_mode='w', 
                             encoding='utf-8', translate=False)
    
         scrape_depth -= 1
@@ -464,20 +521,14 @@ class BS4WebScraper:
 
         #
         """
-        if not isinstance(translate_to, str):
-            raise ValueError("Invalid type for `translate_to`. It s.hould be a string")
+        if translate_to and not isinstance(translate_to, str):
+            raise ValueError("Invalid type for `translate_to`. It should be a string")
 
         self.logger.log_info("STARTING SCRAPING ACTIVITY...\n")
         self.logger.log_info(f"SCRAPING DEPTH: {scrape_depth if scrape_depth > 0 else 'BASE LEVEL'}\n")
         if translate_to:
             self.logger.log_info(f"TRANSLATION ENGINE: {self.translator.translation_engine.upper()}\n")
             self.logger.log_info(f"TRANSLATING TO: {translate_to.upper()}\n")
-
-        print(f"[{get_current_time()}] - STARTING SCRAPING ACTIVITY...\n")
-        print(f"[{get_current_time()}] - SCRAPING DEPTH: {scrape_depth if scrape_depth > 0 else 'BASE LEVEL'}\n")
-        if translate_to:
-            print(f"[{get_current_time()}] - TRANSLATION ENGINE: {self.translator.translation_engine.upper()}\n")
-            print(f"[{get_current_time()}] - TRANSLATING TO: {translate_to.upper()}\n")
 
         start_time = time.perf_counter()
         self._scrape(url=url, scrape_depth=scrape_depth, credentials=credentials, 
@@ -491,10 +542,8 @@ class BS4WebScraper:
             self.logger.log_info("SCRAPED BASE LEVEL SUCCESSFULLY! \n")
 
         if time_taken >= 60:
-            print(f"[{get_current_time()}] - SCRAPING COMPLETED IN {(time_taken / 60):.2f} MINUTES\n")
-            self.logger.log_info(f"SCRAPING COMPLETED IN {(time_taken/ 60):.2f} SECONDS\n")
+            self.logger.log_info(f"SCRAPING COMPLETED IN {(time_taken/ 60):.2f} MINUTES\n")
         else:
-            print(f"[{get_current_time()}] - SCRAPING COMPLETED IN {time_taken:.2f} SECONDS\n")
             self.logger.log_info(f"SCRAPING COMPLETED IN {time_taken:.2f} SECONDS\n")
 
 
@@ -631,9 +680,9 @@ class BS4WebScraper:
         self.logger.log_info('TRANSLATING CONTENT...\n')
         soup = BeautifulSoup(content, self.parser)
         with ThreadPoolExecutor() as executor:
-            for list_item in slice_list(soup.findAll(self.translator._translatable_elements), 100):
+            for list_item in slice_list(soup.findAll(self.translator._translatable_elements), 50):
                 executor.map(self.translator.translate_soup_element, list_item)
-                time.sleep(1.50)
+                time.sleep(self.request_limit_setting.pause_duration)
         content = soup.prettify()
         # NOT FUNCTIONAL FOR NOW
         # content = self.translator.translate_html(content, target_lang=self.translator.target_language)
@@ -767,7 +816,7 @@ class BS4WebScraper:
 
         #### Example Usage: ::
             >>> bs4_scraper.download_url(url="https://example.com/", save_as="example.html",
-                                        save_to="/examples", check_ext="False")
+                                            save_to="/examples", check_ext="False")
         ''' 
         if not isinstance(check_ext, bool):
             raise ValueError('`check_ext` should be of type bool')
@@ -815,11 +864,15 @@ class BS4WebScraper:
             storage_path = storage_path[:-1] if storage_path.endswith('\\') else storage_path
             storage_path = storage_path[1:] if storage_path.startswith('\\') else storage_path        
                 
-        if has_query_params:
+        if has_query_params and (url_obj.query not in self.url_query_params.keys()):
             filename = generate_unique_filename(filename)
+        elif has_query_params and  (url_obj.query in self.url_query_params.keys()):
+            s_path = self.url_query_params[url_obj.query]
+            return s_path, downloaded_file, s_path.split('\\')[-1]
+            
         s_path = f"{self.base_storage_dir}\{storage_path}\{filename}"
 
-        if not has_query_params or (url_obj.query not in self.url_query_params):
+        if not has_query_params or (url_obj.query not in self.url_query_params.keys()):
             # check if file already exists
             if os.path.exists(s_path) is False:
                 response = self._make_request(url)
@@ -831,10 +884,9 @@ class BS4WebScraper:
             if downloaded_file:
                 self.logger.log_info("`%s` DOWNLOADED! \n" % url)
                 if has_query_params:
-                    self.url_query_params.append(url_obj.query)  
-                return s_path, downloaded_file, filename
+                    self.url_query_params[url_obj.query] = s_path  
 
-        return None, None, filename
+        return s_path, downloaded_file, filename
         
 
     def download_urls(self, urls: Iterable[Dict[str, str]],
@@ -1105,7 +1157,7 @@ class BS4WebScraper:
 
             # Only scrape internal links, that is, links associated with the website being scraped only.
             if download and (_base_url_obj.netloc and actual_url_obj.netloc) and _base_url_obj.netloc in actual_url_obj.netloc:
-                storage_path, _ = self.download_url(url=actual_url, check_ext=False)
+                storage_path, _ , _= self.download_url(url=actual_url, check_ext=False)
 
                 # change the element's src to be compatible with the scraped website
                 if storage_path:
@@ -1179,7 +1231,7 @@ class BS4WebScraper:
 
             # Only scrape internal links, that is, links associated with the website being scraped only.
             if download and (_base_url_obj.netloc and actual_url_obj.netloc) and _base_url_obj.netloc in actual_url_obj.netloc:
-                storage_path, new_file = self.download_url(url=actual_url, save_as=html_filename, check_ext=False)
+                storage_path, new_file, html_filename = self.download_url(url=actual_url, save_as=html_filename, check_ext=False)
                 if new_file:
                     new_soup = BeautifulSoup(new_file.read(), self.parser)
                     self._get_associated_files(new_soup)

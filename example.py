@@ -4,7 +4,7 @@ from scripts.help import bs4_credentials_template, available_translation_engines
 # create a scraper object
 bs4_scraper = BS4WebScraper(base_storage_dir='../', parser='html.parser',
                              log_filename='..\logs\\bs4_scraper.log')
-# bs4_scraper.scrape('http://edenplace.pythonanywhere.com/', 0, translate_to='yo')
+bs4_scraper.scrape('http://www.classcentral.com/', 1)
 
 
 

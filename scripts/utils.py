@@ -275,7 +275,7 @@ class RequestLimitSetting:
     @param int `request_count`: number of request that can be made before pausing requests.
 
     @param int `pause_duration`: number of seconds for which all requests will be paused before 
-    allowing requests to be made again. Default is 3 seconds.
+    allowing requests to be made again. Default is 5 seconds.
 
     @param int `max_retries`: maximum number of times a failed request will be retried before moving on.
     Default is 2 retries.
@@ -297,7 +297,7 @@ class RequestLimitSetting:
     requests_paused = False
     logger: Logger = None
     
-    def __init__(self, request_count: int, pause_duration: int | float = 3, max_retries: int = 2, logger: Logger = None) -> None:
+    def __init__(self, request_count: int, pause_duration: int | float = 5, max_retries: int = 2, logger: Logger = None) -> None:
         if not isinstance(request_count, int):
             raise ValueError('`request_count` should be of type int')
         if not isinstance(max_retries, int):
@@ -314,6 +314,13 @@ class RequestLimitSetting:
         self.no_of_available_retries = max_retries
         self.logger = logger
 
+
+    def __setattr__(self, __name: str, __value: Any) -> None:
+        if __name == "pause_duration" and __value < 5:
+            raise ValueError("`pause_duration` cannot be less than 5 seconds")
+        if __name == "max_request_count_per_second" and __value == 0:
+            raise ValueError("`max_request_count_per_second` cannot be 0")
+        return super().__setattr__(__name, __value)
 
     def request_made(self) -> None:
         '''Registers that a request has been made'''
@@ -361,10 +368,10 @@ class RequestLimitSetting:
     def pause(self) -> None:
         '''Disallows request making for the specified pause duration.'''
         self.requests_paused = True
-        self._log("REQUESTS PAUSED")
-        self._log('-------------------')
-        self._log("WAITING...")
-        self._log('-------------------')
+        self._log("REQUESTS PAUSED \n")
+        self._log('------------------- \n')
+        self._log("WAITING... \n")
+        self._log('------------------- \n')
         time.sleep(self.pause_duration)
         self.requests_paused = False
         self._log("REQUESTS RESTARTED \n")

@@ -12,7 +12,7 @@ import copy
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 import translators as ts
-from translators.server import tss
+from translators.server import TranslatorsServer, tss
 
 from .utils import Logger
 
@@ -61,9 +61,10 @@ class Translator:
     """
     logger: Logger = None
     translation_engine: str = 'google'
+    server: TranslatorsServer = tss
     target_language: str = None
     source_language: str = None
-    _cache: Dict[str, str] = dict()
+    _cache: Dict[str, str] = {}
     _translatable_elements: List[str] = [
         'h1', 'u', 's', 'abbr', 'del', 'pre', 'h5', 'sub', 'kbd', 'li', 
         'dd', 'textarea', 'dt', 'input', 'em', 'sup', 'label', 'button', 'h6', 
@@ -83,10 +84,10 @@ class Translator:
     def supported_languages(self) -> dict:
         if self.translation_engine:
             args = ('yes','en', 'zh')
-            func = lambda f: getattr(tss, f"{self.translation_engine}")(*f)
+            func = lambda f: getattr(self.server, f"{self.translation_engine}")(*f)
             func(args)
-            return getattr(tss, f"_{self.translation_engine}").language_map
-        return dict()
+            return getattr(self.server, f"_{self.translation_engine}").language_map
+        return {}
 
     
     def _log(self, message: str, type: str = 'info') -> None:
@@ -216,7 +217,7 @@ class Translator:
                 except Exception as e:
                     self._log(f'{e}\n', type='error')
                     _ct += 1
-                    time.sleep(4 * _ct)
+                    time.sleep(10 * _ct)
                     if _ct <= 3:
                         return self.translator.translate_soup_element(element, _ct)
                 else:
