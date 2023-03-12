@@ -1,11 +1,13 @@
 from scripts.scraper import BS4WebScraper
 from scripts.help import bs4_credentials_template, available_translation_engines
 
+
 # create a scraper object
 bs4_scraper = BS4WebScraper(base_storage_dir='../', parser='html.parser',
-                             log_filename='..\logs\\bs4_scraper.log')
-bs4_scraper.scrape('http://www.classcentral.com/', 1)
+                             log_filename='..\logs\\bs4_scraper.log', scrape_session_pause_duration=5)
 
+# Scrape just the first page (depth = 0) and translate to 'French'.
+bs4_scraper.scrape(url='http://www.google.com/', scrape_depth=0, translate_to='fr')
 
 
 

@@ -6,9 +6,14 @@ DESCRIPTION: ::
 import logging
 import time
 import os
+import yaml
+import toml
+import json
+import csv
+import pickle
 import random
 import string
-from typing import List, Any
+from typing import (IO, Dict, Iterable, List, Any, Tuple)
 
 
 # DEFAULT USER-AGENTS THAT CAN BE USED IN PLACE OF THE RANDOM USER-AGENTS
@@ -34,30 +39,31 @@ def generate_unique_filename(old_filename: str) -> str:
     
     '''
     if not isinstance(old_filename, str):
-        raise ValueError('`old_filename` should be of type str')
+        raise TypeError('`old_filename` should be of type str')
 
     name, ext = os.path.splitext(old_filename)
     unique_filename = f"{name}{generate_unique_id()}{ext}"
     return unique_filename
 
 
-def slice_list(_list: List, slice_size: int) -> list:
+def slice_iterable(iterable: Iterable, slice_size: int) -> list[Iterable]:
     '''
-    Slices a list into smaller lists of size `slice_size`
+    Slices an iterable into smaller iterables of size `slice_size`
 
     Args:
-        _list (List): The list to slice
+        iterable (Iterable): The iterable to slice.
         slice_size (int): The size of each slice
     
     '''
-    if not isinstance(_list, list):
-        raise ValueError('Invalid argument type for `list`')
+    if not isinstance(iterable, Iterable):
+        raise TypeError('Invalid argument type for `iterable`')
     if not isinstance(slice_size, int):
-        raise ValueError('Invalid argument type for `slice_size`')
+        raise TypeError('Invalid argument type for `slice_size`')
     if slice_size < 1:
         raise ValueError('`slice_size` should be greater than 0')
 
-    return [_list[i:i+slice_size] for i in range(0, len(_list), slice_size)]
+    return [iterable[i:i+slice_size] for i in range(0, len(iterable), slice_size)]
+
 
 
 def get_current_date() -> str:
@@ -90,15 +96,26 @@ def generate_random_user_agents() -> list:
     ]
     return user_agents
 
+
 class Logger:
     '''
-    Logger class for logging messages to a file.
+    ### Logger class for logging messages to a file.
 
-    Parameters:
-    -----------
-    @param name (str): The name of the logger.
+    #### Parameters:
+    @param `name` (str): The name of the logger.
 
-    @param log_filename (str): The name of the log file to log messages to.
+    @param `log_filename` (str): The name of the log file to log messages to.
+
+    #### Attributes:
+    @attr `_base_level` (logging.LEVEL): The base level for logging message.
+
+    @attr `_format` (str): log message format.
+
+    @attr `date_format` (str): Log date format string.
+
+    @attr `file_mode` (str): Log file write mode.
+
+    @attr `to_console` (str): Set to True if messages should also be logged on the terminal/console
     
     '''
     _base_level = logging.NOTSET
@@ -109,9 +126,9 @@ class Logger:
 
     def __init__(self, name: str, log_filename: str) -> None:
         if not isinstance(name, str):
-            raise ValueError('Invalid argument type for `name`')
+            raise TypeError('Invalid argument type for `name`')
         if not isinstance(log_filename, str):
-            raise ValueError('Invalid argument type for `log_filename`')
+            raise TypeError('Invalid argument type for `log_filename`')
 
         _, ext = os.path.splitext(log_filename)
         if ext and ext != '.log':
@@ -171,7 +188,7 @@ class Logger:
             - level (str): The logging level to set the logger to.
         '''
         if not isinstance(level, str):
-            raise ValueError('`level` should be of type str')
+            raise TypeError('`level` should be of type str')
         match level.upper():
             case "INFO":
                 self._base_level = logging.INFO
@@ -196,7 +213,7 @@ class Logger:
         if level is None:
             return self.log_info(message)
         if not isinstance(level, str):
-            raise ValueError('`level` should be of type str')
+            raise TypeError('`level` should be of type str')
 
         match level.upper():
             case "INFO":
@@ -217,7 +234,7 @@ class Logger:
         if not message:
             ValueError("`message` is a required argument")
         if not isinstance(message, str):
-            ValueError("`message` should be of type str")
+            TypeError("`message` should be of type str")
         
         self._update_config()
         self._logger.info(msg=message)
@@ -227,7 +244,7 @@ class Logger:
         if not message:
             ValueError("`message` is a required argument")
         if not isinstance(message, str):
-            ValueError("`message` should be of type str")
+            TypeError("`message` should be of type str")
 
         self._update_config()
         self._logger.debug(msg=message)
@@ -237,7 +254,7 @@ class Logger:
         if not message:
             ValueError("`message` is a required argument")
         if not isinstance(message, str):
-            ValueError("`message` should be of type str")
+            TypeError("`message` should be of type str")
             
         self._update_config()
         self._logger.error(msg=message)
@@ -247,7 +264,7 @@ class Logger:
         if not message:
             ValueError("`message` is a required argument")
         if not isinstance(message, str):
-            ValueError("`message` should be of type str")
+            TypeError("`message` should be of type str")
             
         self._update_config()
         self._logger.warning(msg=message)
@@ -257,7 +274,7 @@ class Logger:
         if not message:
             ValueError("`message` is a required argument")
         if not isinstance(message, str):
-            ValueError("`message` should be of type str")
+            TypeError("`message` should be of type str")
             
         self._update_config()
         self._logger.critical(msg=message)
@@ -268,22 +285,20 @@ class Logger:
             
 class RequestLimitSetting:
     '''
-    #### BS4WebScraper requests limiting setting.
+    ### BS4WebScraper requests limiting setting.
 
-    Parameters:
-    -----------
+    #### Parameters:
     @param int `request_count`: number of request that can be made before pausing requests.
 
     @param int `pause_duration`: number of seconds for which all requests will be paused before 
     allowing requests to be made again. Default is 5 seconds.
 
     @param int `max_retries`: maximum number of times a failed request will be retried before moving on.
-    Default is 2 retries.
+    Default is 3 retries.
 
     @param Logger `logger`: `Logger` instance to be used to write logs.
 
-    Attributes:
-    -----------
+    #### Attributes:
     @attr bool `request_paused`: is True if requests are paused.
 
     @attr int `max_request_count_per_second`: returns the value provided for :param `request_count`.
@@ -299,13 +314,13 @@ class RequestLimitSetting:
     
     def __init__(self, request_count: int, pause_duration: int | float = 5, max_retries: int = 2, logger: Logger = None) -> None:
         if not isinstance(request_count, int):
-            raise ValueError('`request_count` should be of type int')
+            raise TypeError('`request_count` should be of type int')
         if not isinstance(max_retries, int):
-            raise ValueError('`max_retries` should be of type int')
+            raise TypeError('`max_retries` should be of type int')
         if not isinstance(pause_duration, (int, float)):
-            raise ValueError("Invalid type: %s for `pause_duration`" % type(pause_duration))
+            raise TypeError("Invalid type: %s for `pause_duration`" % type(pause_duration))
         if logger and not isinstance(logger, Logger):
-            raise ValueError('Invalid type for `logger`')
+            raise TypeError('Invalid type for `logger`')
 
         self.max_request_count_per_second = request_count
         self.pause_duration = pause_duration
@@ -339,7 +354,7 @@ class RequestLimitSetting:
             message (str): The message to log
         '''
         if not isinstance(message, str):
-            raise ValueError('Invalid type for `message`')
+            raise TypeError('Invalid type for `message`')
             
         if self.logger:
             self.logger.log(message)
@@ -375,5 +390,239 @@ class RequestLimitSetting:
         time.sleep(self.pause_duration)
         self.requests_paused = False
         self._log("REQUESTS RESTARTED \n")
+
+
+
+class FileHandler:
+    """
+    ### Handles basic read and write operations on supported file types.
+
+    #### Supported File Types:
+    .csv, .json, .txt, .html, .xml, .yml, .yaml, .js, .css, .md, .toml
+    .doc, .docx, .pdf, .pickle, .pkl. Mostly text based file types.
+
+    #### Parameters:
+    @param str `filepath`: path to the file to be read or written to.
+
+    @param str `encoding`: encoding to be used when reading or writing to the file.
+
+    @param bool `raise_not_found`: raise FileNotFoundError if file object specified by `filepath`
+    cannot be found. If set to False, the file is created if it cannot be found. Defaults to False.
+
+    #### Attributes:
+    @attr str `filetype`: type of file to be read or written to. This is determined by the file extension.
+
+    @attr IO `file`: file object to be read or written into.
+
+    #### Methods:
+    @method read_from_file: reads data from the file.
+
+    @method write_to_file: writes data to the file.
+
+    #### NOTE: All other methods are called based on the file type.
+    """
+
+    file: IO | None = None
+
+    def __init__(self, filepath: str, encoding: str = 'utf-8', raise_not_found: bool = False) -> None:
+        if not isinstance(filepath, str):
+            raise TypeError("Invalid type for `filepath`")
+        if not isinstance(encoding, str):
+            raise TypeError("Invalid type for `encoding`")
+        if not isinstance(raise_not_found, bool):
+            raise TypeError("Invalid type for `raise_not_found`")
+        
+        self.filepath = os.path.abspath(filepath)
+        if not os.path.exists(self.filepath):
+            if raise_not_found:
+                raise FileNotFoundError(f"File not found: {self.filepath}")
+            os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+        self.encoding = encoding
+        # open file in append mode by default so it can be written into and read from 
+        # even if the `_open_file` method has not being called yet.
+        self._open_file('a+')
+
+
+    @property
+    def filetype(self) -> str:
+        filetype = os.path.splitext(self.filepath)[-1].removeprefix('.').lower()
+        if filetype in ['yaml', 'yml']:
+            filetype = 'yaml'
+        elif filetype in ['pickle', 'pkl']:
+            filetype = 'pickle'
+        return filetype
+
+    @staticmethod
+    def supported_file_types() -> List[str]:
+        return [
+        'txt', 'doc', 'docx', 'pdf', 'html', 'htm', 'xml',
+         'js', 'css', 'md', 'json', 'csv', 'yaml', 'yml', 
+         'toml', 'pickle', 'pkl',
+        ]
+
+
+    def _open_file(self, mode: str = 'a+') -> IO:
+        '''
+        Opens the file in the specified mode. Default mode is 'a+'.
+        
+        Args:
+            mode (str): The mode to open the file in. Default is 'a+'
+        '''
+        try:
+            self._close_file()
+        except Exception:
+            pass
+        if 'b' in mode:
+            self.file = open(self.filepath, mode=mode)
+        else:
+            self.file = open(self.filepath, mode=mode, encoding=self.encoding)
+        return self.file
+
+    def _close_file(self) -> None:
+        '''
+        Closes the file.
+        '''
+        self.file.close()
+        return None
+
+    def read_from_file(self, read_mode: str | None = None) -> Any:
+        '''
+        Reads the file and returns the content.
+
+        Args:
+            read_mode(str): The mode to be used to read the file. If None, it writes in read(r) mode.
+        '''
+        if read_mode and not isinstance(read_mode, str):
+            raise TypeError("Invalid type for `read_mode`")
+        if read_mode and read_mode not in ['r', 'rb', 'r+', 'rb+']:
+            raise ValueError(f"Invalid literal `{read_mode}` for `read_mode`")
+
+        if self.filetype in self.supported_file_types():
+            self._open_file(read_mode or 'r+')
+            try:
+                return getattr(self, f'_read_{self.filetype}')()
+            except:
+                return self.file.read()
+        raise Exception(F"Unsupported File Type: `{self.filetype}`")
+
+    
+    def write_to_file(self, content: Any, write_mode: str | None = None) -> None:
+        '''
+        Writes the content to the file.
+
+        Args:
+            content (Any): The content to write to the file.
+            write_mode(str): The mode to be used to write the file. If None, it writes in append(a+) mode.
+        '''
+        if write_mode and not isinstance(write_mode, str):
+            raise TypeError("Invalid type for `write_mode`")
+        if write_mode and write_mode not in ['w', 'wb', 'w+', 'wb+', 'a+', 'a', 'ab+']:
+            raise ValueError(f"Invalid literal `{write_mode}` for `write_mode`")
+
+        if self.filetype in self.supported_file_types():
+            self._open_file(write_mode or 'a+')
+            try:
+                return getattr(self, f'_write_{self.filetype}')(content)
+            except:
+                self.file.write(content)
+                return None
+        raise Exception(F"Unsupported File Type: `{self.filetype}`")
+            
+
+    def _read_json(self) -> Dict:
+        '''
+        Reads the file and returns the content as a dictionary.
+        '''
+        return json.load(self.file)
+
+
+    def _write_json(self, content: dict, indent: int = 1) -> None:
+        '''
+        Writes the content to the file.
+
+        Args:
+            content (dict): The content to write to the file
+        '''
+        if not isinstance(content, dict):
+            raise TypeError("Invalid type for `content`")
+        _json = json.dumps(content, indent=indent)
+        self.file.write(_json)
+        return None
+
+
+    def _write_csv(self, content: Iterable) -> None:
+        '''
+        Writes the content to the file.
+
+        Args:
+            content (list): The content to write to the file
+        '''
+        if not isinstance(content, Iterable):
+            raise TypeError("Invalid type for `content`")
+        writer = csv.writer(self.file)
+        writer.writerows(content)
+        return None
+
+
+    def _read_csv(self) -> List:
+        '''
+        Reads the file and returns the content as a list.
+        '''
+        reader = csv.reader(self.file)
+        return list(reader)
+
+
+    def _read_yaml(self) -> Dict: #
+        '''
+        Reads the file and returns the content as a dictionary.
+        '''
+        return yaml.load(self.file, Loader=yaml.FullLoader)
+    
+
+    def _write_yaml(self, content: dict) -> None: #
+        '''
+        Writes the content to the file.
+
+        Args:
+            content (dict): The content to write to the file
+        '''
+        yaml.dump(content, self.file, default_flow_style=False)
+        return None
+
+
+    def _read_pickle(self) -> Any:
+        '''
+        Reads the file and returns the content.
+        '''
+        return pickle.load(self.file)
+
+
+    def _write_pickle(self, content: Any) -> None:
+        '''
+        Writes the content to the file.
+
+        Args:
+            content (Any): The content to write to the file
+        '''
+        pickle.dump(content, self.file)
+        return None
+
+
+    def _read_toml(self) -> Dict:
+        '''
+        Reads the file and returns the content as a dictionary.
+        '''
+        return toml.load(self.file)
+
+
+    def _write_toml(self, content: dict) -> None:
+        '''
+        Writes the content to the file.
+
+        Args:
+            content (dict): The content to write to the file
+        '''
+        toml.dump(content, self.file)
+        return None
 
 

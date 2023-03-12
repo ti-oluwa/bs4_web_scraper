@@ -6,7 +6,7 @@ DESCRIPTION: ::
     Enterprises provide free services, we should be grateful instead of making trouble.
 """
 
-from typing import Dict, List
+from typing import Dict, List, IO
 import time
 import copy
 from bs4 import BeautifulSoup
@@ -14,18 +14,18 @@ from bs4.element import Tag
 import translators as ts
 from translators.server import TranslatorsServer, tss
 
-from .utils import Logger
+from .utils import Logger, FileHandler, slice_iterable
 
 
 
 class Translator:
     """
-    Translator class for translating text and html content using the `translators` package.
+    ### Translator class for translating text and html content using the `translators` package.
 
-    Parameters:
+    #### Parameters:
         translation_engine (str): The translation engine to be used. Defaults to "google".
 
-    Attributes: ::
+    #### Attributes: ::
         translation_engine (str): The translation engine to be used. Defaults to "google".
         target_language (str): The target language to translate to. Defaults to None.
         source_language (str): The source language to translate from. Defaults to None.
@@ -75,7 +75,7 @@ class Translator:
 
     def __init__(self, translation_engine: str = "google", ) -> None:
         if not isinstance(translation_engine, str):
-            raise ValueError('Invalid type for translation engine')
+            raise TypeError('Invalid type for translation engine')
 
         self.translation_engine = translation_engine
 
@@ -99,13 +99,13 @@ class Translator:
             type (str): The type of message to log. Defaults to 'info'.
         '''
         if self.logger and not isinstance(self.logger, Logger):
-            raise ValueError('Invalid type for `self.logger`')
+            raise TypeError('Invalid type for `self.logger`')
         if not isinstance(message, str):
-            raise ValueError('Invalid type for `message`')
+            raise TypeError('Invalid type for `message`')
         if not isinstance(type, str):
-            raise ValueError('Invalid type for `type`')
+            raise TypeError('Invalid type for `type`')
         if type.lower() not in ['info', 'warning', 'error', 'debug']:
-            raise ValueError('Invalid value for `type`')
+            raise TypeError('Invalid value for `type`')
         if self.logger:
             self.logger.log(message, level=type.upper())
         else:
@@ -120,8 +120,8 @@ class Translator:
             element (str): The HTML element to be added to the list of translatable elements.
         '''
         if not isinstance(element, str):
-            raise ValueError("Invalid type for `element`")
-        # check if element is a valid HTML element
+            raise TypeError("Invalid type for `element`")
+        # Check if element is a valid HTML element
         html_element = BeautifulSoup(f"<{element}></{element}>", 'html.parser').find(element)
         if html_element:
             self._translatable_elements.append(element)
@@ -138,7 +138,7 @@ class Translator:
             element (str): The HTML element to be removed from the list of translatable elements.
         '''
         if not isinstance(element, str):
-            raise ValueError("Invalid type for `element`")
+            raise TypeError("Invalid type for `element`")
         if element in self._translatable_elements:
             self._translatable_elements.remove(element)
 
@@ -156,12 +156,13 @@ class Translator:
 
         '''
         if not isinstance(text, str):
-            raise ValueError("Invalid type for `text`")
+            raise TypeError("Invalid type for `text`")
         if not isinstance(src_lang, str):
-            raise ValueError("Invalid type for `src_lang`")
+            raise TypeError("Invalid type for `src_lang`")
         if not isinstance(target_lang, str):
-            raise ValueError("Invalid type for `target_lang`")
-
+            raise TypeError("Invalid type for `target_lang`")
+        if not text.strip():
+            raise ValueError("`text` cannot be empty!")
         translated_text = ts.translate_text(query_text=text, to_language=target_lang, 
                                             from_language=src_lang, translator=self.translation_engine)
         return translated_text
@@ -178,16 +179,40 @@ class Translator:
     #         target_lang (str, optional): Target language. Defaults to "en".
     #     '''
     #     if not isinstance(html, (str, bytes)):
-    #         raise ValueError("Invalid type for `html`")
+    #         raise TypeError("Invalid type for `html`")
     #     if not isinstance(src_lang, str):
-    #         raise ValueError("Invalid type for `src_lang`")
+    #         raise TypeError("Invalid type for `src_lang`")
     #     if not isinstance(target_lang, str):
-    #         raise ValueError("Invalid type for `target_lang`")
+    #         raise TypeError("Invalid type for `target_lang`")
 
     #     html = html.decode('utf-8') if isinstance(html, bytes) else html
     #     translated_html = ts.translate_html(html_text=html, to_language=target_lang, from_language=src_lang, translator=self.translation_engine)
     #     print("TRANSLATION: ", translated_html)
     #     return translated_html
+
+
+    def translate_file(self, filepath: str, src_lang: str="auto", target_lang: str="en") -> IO:
+        '''
+        Translates file from `src_lang` to `target_lang` using `self.translator`.
+
+        Returns translated file.
+
+        Supported file types include: .txt, .csv, .doc, .docx, .pdf, .md..., mostly files with text content.
+
+        Args:
+            filepath (str): path to the file to be translated.
+            src_lang (str, optional): Source language. Defaults to "auto".
+            target_lang (str, optional): Target language. Defaults to "en".
+
+        '''
+        file_handler = FileHandler(filepath, raise_not_found=True)
+        file_content = file_handler.read_from_file()
+        contents = slice_iterable(file_content, 4000)
+        translated_contents = list(map(lambda text: self.translate_text(text, src_lang=src_lang, target_lang=target_lang), contents))
+        translated_text = "".join(translated_contents)
+        file_handler.write_to_file(translated_text, write_mode='w+')
+        file_handler._open_file(mode='r+')
+        return file_handler.file
 
 
     def translate_soup_element(self, element: Tag, _ct: int = 0) -> None:
@@ -201,9 +226,9 @@ class Translator:
         
         '''
         if not isinstance(element, Tag):
-            raise ValueError("Invalid type for `element`")
+            raise TypeError("Invalid type for `element`")
         if not isinstance(_ct, int):
-            raise ValueError("Invalid type for `_ct`")
+            raise TypeError("Invalid type for `_ct`")
 
         if element.string.strip():
             initial_string = copy.copy(element.string)
@@ -235,7 +260,7 @@ class Translator:
         
         '''
         if not isinstance(lang_code, str):
-            raise ValueError("Invalid type for `lang_code`")
+            raise TypeError("Invalid type for `lang_code`")
         lang_code = lang_code.strip().lower()
         if not lang_code:
             raise ValueError("`lang_code` cannot be empty")
@@ -251,7 +276,7 @@ class Translator:
         
         '''
         if target_lang and not isinstance(target_lang, str):
-            raise ValueError('`target_lang` should be of type str')
+            raise TypeError('`target_lang` should be of type str')
         if target_lang and not self.lang_is_supported(target_lang):
             raise Exception("Unsupported target language for translation")
 
@@ -267,11 +292,9 @@ class Translator:
         
         '''
         if src_lang and not isinstance(src_lang, str):
-            raise ValueError('`src_lang` should be of type str')
+            raise TypeError('`src_lang` should be of type str')
         if src_lang and not self.lang_is_supported(src_lang):
             raise Exception("Unsupported source language for translation")
 
         self.source_language = src_lang.strip().lower()
         
-
-

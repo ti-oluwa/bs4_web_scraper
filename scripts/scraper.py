@@ -8,8 +8,6 @@ DESCRIPTION: ::
     websites you are scraping by making a donation.
 """
 
-
-
 from collections.abc import Iterable
 from typing import Any, Dict, List
 import requests
@@ -25,9 +23,10 @@ from urllib3.util.url import parse_url, Url
 from urllib.parse import urljoin
 from concurrent.futures import ThreadPoolExecutor
 
-from .utils import (Logger, RequestLimitSetting, slice_list, generate_random_user_agents, generate_unique_filename)
+from .utils import (Logger, RequestLimitSetting, FileHandler, slice_iterable,
+                     generate_random_user_agents, generate_unique_filename)
 from .help import available_translation_engines
-from .translators import Translator
+from .translate import Translator
 
 
 # SCRAPE SITES WITH PAGINATION
@@ -189,7 +188,7 @@ class BS4WebScraper:
 
     def __init__(self, parser: str = 'lxml', html_filename: str = "index.html", 
                 no_of_requests_before_pause: int = 20, scrape_session_pause_duration: int | float | Any = "auto",
-                max_no_of_retries: int = 2, base_storage_dir: str = '.', storage_path: str = '', 
+                max_no_of_retries: int = 3, base_storage_dir: str = '.', storage_path: str = '', 
                 log_filename: str | None = None, translation_engine: str | None = 'default') -> None:
         """
         Initializes the BS4WebScraper class instance.
@@ -200,26 +199,24 @@ class BS4WebScraper:
         except Exception as e:
             raise ValueError(f"Invalid parser for BeautifulSoup: {parser}") from e
         if not isinstance(html_filename, str) or not html_filename.endswith('.html'):
-            raise ValueError('`html_filename` should be of type str and should take the format `<filename>.html`.')
+            raise TypeError('`html_filename` should be of type str and should take the format `<filename>.html`.')
         if not isinstance(storage_path, str):
-            raise ValueError('`storage_path` should be of type str')
+            raise TypeError('`storage_path` should be of type str')
         if not isinstance(base_storage_dir, str):
-            raise ValueError('`base_storage_dir` should be of type str')
+            raise TypeError('`base_storage_dir` should be of type str')
         if not isinstance(no_of_requests_before_pause, int):
-            raise ValueError('`no_of_requests_before_pause` should be of type int')
+            raise TypeError('`no_of_requests_before_pause` should be of type int')
         if not isinstance(scrape_session_pause_duration, (int, float, str)):
-            raise ValueError('`scrape_session_pause_duration` should be of type int or float')
+            raise TypeError('`scrape_session_pause_duration` should be of type int or float')
         if isinstance(scrape_session_pause_duration, str) and scrape_session_pause_duration != 'auto':
-            raise ValueError('The only accepted string value for `scrape_session_pause_duration` is `auto`.')
+            raise TypeError('The only accepted string value for `scrape_session_pause_duration` is `auto`.')
         if scrape_session_pause_duration == 'auto':
             scrape_session_pause_duration = max(math.ceil(0.542 * no_of_requests_before_pause), 5)
-        # if scrape_session_pause_duration < 5:
-        #     raise Exception("`scrape_session_pause_duration` cannot be less than 5 seconds")
         if log_filename and not isinstance(log_filename, str):
-            raise ValueError('`log_filename` should be of type str')
+            raise TypeError('`log_filename` should be of type str')
 
         if translation_engine and not isinstance(translation_engine, str):
-            raise ValueError('`translation_engine` should be of type str')
+            raise TypeError('`translation_engine` should be of type str')
         if translation_engine and (translation_engine != 'default' 
                                     and translation_engine not in available_translation_engines):
             raise Exception("Unsupported translation engine")
@@ -257,12 +254,12 @@ class BS4WebScraper:
     def __setattr__(self, __name: str, __value: Any) -> None:
         if __name == "_level_reached":
             if not isinstance(__value, int):
-                raise ValueError(f"`{__name}` should be of type int")
+                raise TypeError(f"`{__name}` should be of type int")
             if __value < 0:
                 raise ValueError(f"`{__name}` cannot be less than 0")
         elif __name == "max_no_of_threads":
             if not isinstance(__value, int):
-                raise ValueError(f"`{__name}` should be of type int")
+                raise TypeError(f"`{__name}` should be of type int")
             if __value < 1:
                 raise ValueError(f"`{__name}` cannot be less than 1")
             if __value > 10:
@@ -279,7 +276,7 @@ class BS4WebScraper:
             The base url will be `http://www.example.com:80`.
         '''
         if not isinstance(url, str):
-            raise ValueError('`url` should be of type str')
+            raise TypeError('`url` should be of type str')
         url_obj = parse_url(url)
         if not (url_obj.host and url_obj.scheme):
             raise ValueError('Invalid url!')
@@ -296,7 +293,7 @@ class BS4WebScraper:
             url (str): The url to be parsed. The url should be of the format `http://www.example.com:80/path/to/resource?query=string`,
             The base url will be `http://www.example.com:80`.
         '''
-        self.base_url = self.get_base_url(url)
+        self._base_url = self.get_base_url(url)
 
     
     def _validate_auth_credentials(self, credentials: Dict[str, str]) -> str:
@@ -309,7 +306,7 @@ class BS4WebScraper:
             credentials (dict): A dictionary containing the authentication credentials.
         '''
         if not isinstance(credentials, dict):
-            raise ValueError('Invalid type for `credentials`')
+            raise TypeError('Invalid type for `credentials`')
         if len(credentials.items()) < 3:
             raise Exception('Some keys may be missing in `credentials`')
         if not credentials.get('auth_username_field', None):
@@ -325,7 +322,7 @@ class BS4WebScraper:
 
         for key, value in credentials.items():
             if not isinstance(value, str):
-                raise ValueError(f'Invalid type for `{key}`. `{key}` should be of type str')
+                raise TypeError(f'Invalid type for `{key}`. `{key}` should be of type str')
 
         auth_url_obj = parse_url(credentials.get("auth_url"))
         if not (auth_url_obj.host and auth_url_obj.scheme):
@@ -349,7 +346,7 @@ class BS4WebScraper:
         if not isinstance(self._base_url, str):
             raise AttributeError("Invalid type for `self._base_url`")
         if not isinstance(credentials, dict):
-            raise ValueError('Invalid type for `credentials`')
+            raise TypeError('Invalid type for `credentials`')
 
         self._auth_url = self._validate_auth_credentials(credentials)
         _credentials = {}
@@ -380,6 +377,7 @@ class BS4WebScraper:
         no_of_threads = min(no_of_threads, self.max_no_of_threads)
         return no_of_threads if no_of_threads > 0 else 1
 
+
     def _scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None = None, translate_to: str | None = None) -> None:
         '''
         Main scraping method.
@@ -388,13 +386,13 @@ class BS4WebScraper:
         Use the `scrape` method instead.
         '''
         if not isinstance(url, str):
-            raise ValueError('`url` should be of type str')
+            raise TypeError('`url` should be of type str')
 
         _url_obj = parse_url(url)
         if not (_url_obj.host and _url_obj.scheme):
             raise ValueError('Invalid url! url should start with "http://" or "https://"')
         if not isinstance(scrape_depth, int):
-            raise ValueError('`scrape_depth` should be of type int')
+            raise TypeError('`scrape_depth` should be of type int')
 
         # use proper url format
         url = _url_obj.url
@@ -448,7 +446,7 @@ class BS4WebScraper:
             with ThreadPoolExecutor() as executor:
                 no_of_threads = self._get_suitable_no_threads(len(links))
                 self.logger.log_error(f'NO OF THREADS: {no_of_threads}')
-                for link_list in slice_list(links, no_of_threads):
+                for link_list in slice_iterable(links, no_of_threads):
                     values = executor.map(self._get_soup_link, link_list)
                     page_links_details.extend(values)
             # for link in links:
@@ -510,7 +508,7 @@ class BS4WebScraper:
         
         >>> bs4_scraper = BS4WebScraper(...)
         >>> print(bs4_scraper.translator.supported_languages)
-        >>> # {'af': 'afrikaans', 'sq': 'albanian', 'am': 'amharic', ...}
+        >>> # Output: {'af': 'afrikaans', 'sq': 'albanian', 'am': 'amharic', ...}
 
         Make sure to set the `translation_engine` argument to the engine you want to use for translation.
 
@@ -522,7 +520,7 @@ class BS4WebScraper:
         #
         """
         if translate_to and not isinstance(translate_to, str):
-            raise ValueError("Invalid type for `translate_to`. It should be a string")
+            raise TypeError("Invalid type for `translate_to`. It should be a string")
 
         self.logger.log_info("STARTING SCRAPING ACTIVITY...\n")
         self.logger.log_info(f"SCRAPING DEPTH: {scrape_depth if scrape_depth > 0 else 'BASE LEVEL'}\n")
@@ -550,7 +548,7 @@ class BS4WebScraper:
     def get_request_headers(self) -> dict:
         '''Returns a suitable request header'''
         if not isinstance(generate_random_user_agents(), list):
-            raise Exception("Invalid return type for `self.generate_random_user_agents`")
+            raise TypeError("Invalid return type for `self.generate_random_user_agents`")
 
         if self._auth_credentials:
             if not self._request_user_agent:
@@ -613,14 +611,14 @@ class BS4WebScraper:
             url (str): url to make request to
         '''  
         if not isinstance(url, str):
-            raise ValueError('url is not a string')
+            raise TypeError('url is not a string')
         url_obj = parse_url(url)
         if not (url_obj.netloc or url_obj.scheme):
             raise ValueError("Invalid url!")
 
         headers = self.get_request_headers()
         if not isinstance(headers, dict):
-            raise Exception("Invalid return type for `self.get_request_headers`")
+            raise TypeError("Invalid return type for `self.get_request_headers`")
         self._request_session.headers.update(headers)        
 
         # authenticate if credentials are already set
@@ -674,13 +672,13 @@ class BS4WebScraper:
             content (str | bytes): The content to translate.
         '''
         if not isinstance(content, (str, bytes)):
-            raise ValueError("Invalid type for `content`")
+            raise TypeError("Invalid type for `content`")
         is_bytes = isinstance(content, bytes)
 
         self.logger.log_info('TRANSLATING CONTENT...\n')
         soup = BeautifulSoup(content, self.parser)
         with ThreadPoolExecutor() as executor:
-            for list_item in slice_list(soup.findAll(self.translator._translatable_elements), 50):
+            for list_item in slice_iterable(soup.findAll(self.translator._translatable_elements), 50):
                 executor.map(self.translator.translate_soup_element, list_item)
                 time.sleep(self.request_limit_setting.pause_duration)
         content = soup.prettify()
@@ -713,23 +711,23 @@ class BS4WebScraper:
 
         '''
         if not isinstance(filename, str):
-            raise ValueError("Invalid argument type for `filename`")
+            raise TypeError("Invalid argument type for `filename`")
         if not isinstance(storage_path, str):
-            raise ValueError("Invalid argument type for `storage_path`")
+            raise TypeError("Invalid argument type for `storage_path`")
         if not isinstance(create_mode, str):
-            raise ValueError("Invalid argument type for `create_mode`")
+            raise TypeError("Invalid argument type for `create_mode`")
         if not isinstance(content, (bytes, str)):
-            raise ValueError('Argument `content` can only be bytes or str.')
+            raise TypeError('Argument `content` can only be bytes or str.')
         if not isinstance(encoding, str) and encoding is not None:
-            raise ValueError('Argument `encoding` can only be NoneType or str.')
+            raise TypeError('Argument `encoding` can only be NoneType or str.')
         if create_mode not in ['x', 'xb', 'w', 'wb']:
             raise ValueError("`%s` is not an allowed mode. Allowed modes: 'x', 'xb', 'w', 'wb'." % create_mode)
         if create_mode in ['xb', 'wb'] and isinstance(content, str):
-            raise ValueError("`create_mode` specified is a byte mode. content provide is of type str not bytes")
+            raise TypeError("`create_mode` specified is a byte mode. content provide is of type str not bytes")
         if create_mode in ['x', 'w'] and isinstance(content, bytes):
-            raise ValueError("`create_mode` specified is a string mode. content provide is of type bytes not str")
+            raise TypeError("`create_mode` specified is a string mode. content provide is of type bytes not str")
         if create_mode in ["x", "w"] and encoding is None:
-            raise ValueError("Encoding cannot be NoneType when `create_mode` is 'x'.")
+            raise TypeError("Encoding cannot be NoneType when `create_mode` is 'x'.")
 
         # Translate if necessary
         if translate and (self.translator.target_language and filename.endswith('.html')):
@@ -763,9 +761,9 @@ class BS4WebScraper:
             url_obj (Url): Url object to be parsed.
         '''
         if not isinstance(url_obj, Url):
-            raise ValueError('`url_obj` should be of type Url')
+            raise TypeError('`url_obj` should be of type Url')
         if remove_str and not isinstance(remove_str, str):
-            raise ValueError('`remove_str` should be of type str')
+            raise TypeError('`remove_str` should be of type str')
 
         url_path = url_obj.path or ''
         url_path = url_path.replace(remove_str, '') if remove_str else url_path
@@ -781,7 +779,7 @@ class BS4WebScraper:
         
         '''
         if not isinstance(tag_name, str):
-            raise ValueError('`tag_name` should be of type str')
+            raise TypeError('`tag_name` should be of type str')
         tag_name = tag_name.lower()
 
         if tag_name in ['audio', 'iframe', 'track', 'img', 'source', 'script', 'embed', 'video']:
@@ -815,17 +813,16 @@ class BS4WebScraper:
             Just be careful as this may lead to saving files with no or incorrect file extensions.
 
         #### Example Usage: ::
-            >>> bs4_scraper.download_url(url="https://example.com/", save_as="example.html",
-                                            save_to="/examples", check_ext="False")
+            >>> bs4_scraper.download_url(url="https://example.com/", save_as="example.html", save_to="/examples", check_ext="False")
         ''' 
         if not isinstance(check_ext, bool):
-            raise ValueError('`check_ext` should be of type bool')
+            raise TypeError('`check_ext` should be of type bool')
         if save_to and not isinstance(save_to, str):
-            raise ValueError('`save_to` should be of type str')
+            raise TypeError('`save_to` should be of type str')
         if not url:
             raise ValueError('`url` is required.')
         if not isinstance(url, str):
-            raise ValueError('`url` should be of type str')
+            raise TypeError('`url` should be of type str')
         url_obj = parse_url(url)
         if url_obj.scheme not in ['http', 'https']:
             raise ValueError('Only http and https urls are allowed.')
@@ -839,7 +836,7 @@ class BS4WebScraper:
 
         if save_as:
             if not isinstance(save_as, str):
-                raise ValueError('`save_as` should be of type str')
+                raise TypeError('`save_as` should be of type str')
             save_as_name, save_as_ext = os.path.splitext(save_as)
             if not (save_as_name and save_as_ext):
                 raise ValueError('Invalid `save_as` name.')
@@ -853,6 +850,7 @@ class BS4WebScraper:
         has_query_params = False
         response = None
         downloaded_file = None
+        save_to = save_to.replace('/', '\\').strip()
         storage_path = save_to or ''
         # check if element src has query params
         if url_obj.query:
@@ -915,7 +913,7 @@ class BS4WebScraper:
         if not urls:
             raise ValueError('`urls` is required.')
         if not isinstance(urls, Iterable):
-            raise ValueError('`urls` should be of type Iterable[dict[str, str]]')
+            raise TypeError('`urls` should be of type Iterable[dict[str, str]]')
         
         urls = list(filter(lambda url: isinstance(url, dict) and any(url), urls))
 
@@ -949,7 +947,7 @@ class BS4WebScraper:
         return results
 
 
-    def get_links(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+    def get_links(self, url: str, save_to_file: bool = False, file_path: str = "./links.txt") -> List[str]:
         """
         Gets all the links from the given url.
 
@@ -958,14 +956,15 @@ class BS4WebScraper:
         Args:
             - url (str): Url to get the links from.
             - save_to_file (bool, optional): Whether to save the links to a file. Defaults to False.
-            - file_format (str, optional): File format to save the links to. Defaults to "csv".
-            Available file formats are: csv, json, txt, xlsx.
+            - file_path (str, optional): File to save the links to. Defaults to "./links.txt".
+            Available file formats are: csv, txt, doc, docx, pdf...
         """
         if not isinstance(save_to_file, bool):
-            raise ValueError("Invalid type for `save_as_file`")
-        if not isinstance(file_format, str):
-            raise ValueError("Invalid type for `save_as`")
+            raise TypeError("Invalid type for `save_as_file`")
+        if not isinstance(file_path, str):
+            raise TypeError("Invalid type for `save_as`")
         result = []
+        self.set_base_url(url)
         response = self._make_request(url)
         if response:
             soup = BeautifulSoup(response.content, self.parser)
@@ -974,10 +973,21 @@ class BS4WebScraper:
             with ThreadPoolExecutor() as executor:
                 values = executor.map(lambda arg: self._get_soup_link(*arg), list(map(lambda link: (link, False), links)))
                 result.extend(values)
+
+        if save_to_file:
+            file_handler = FileHandler(file_path)
+            if file_handler.filetype == 'csv':
+                url_lists = slice_iterable(result, 1)
+                detailed_url_list = [('NO', 'URLS')]
+                detailed_url_list.extend([ (c + 1, url_lists[c][0]) for c in range(len(url_lists)) ])
+                file_handler.write_to_file(detailed_url_list)
+            else:
+                for item in result:
+                    file_handler.write_to_file(f"{item}\n\n")
         return result
 
 
-    def get_styles(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+    def get_styles(self, url: str, save_to_file: bool = False, file_path: str = "./styles.txt") -> List[str]:
         """
         Gets all the styles from the given url.
 
@@ -986,26 +996,39 @@ class BS4WebScraper:
         Args:
             - url (str): Url to get the styles from.
             - save_to_file (bool, optional): Whether to save the styles to a file. Defaults to False.
-            - file_format (str, optional): File format to save the styles to. Defaults to "csv".
-            Available file formats are: csv, json, txt, xlsx.
+            - file_path (str, optional): File to save the links to. Defaults to "./styles.txt".
+            Available file formats are: csv, txt, doc, docx, pdf...
         """
         if not isinstance(save_to_file, bool):
-            raise ValueError("Invalid type for `save_as_file`")
-        if not isinstance(file_format, str):
-            raise ValueError("Invalid type for `save_as`")
+            raise TypeError("Invalid type for `save_as_file`")
+        if not isinstance(file_path, str):
+            raise TypeError("Invalid type for `save_as`")
         result = []
+        self.set_base_url(url)
         response = self._make_request(url)
         if response:
             soup = BeautifulSoup(response.content, self.parser)
             styles = soup.find_all('link', {'rel': 'stylesheet'})
+            styles += soup.find_all('link', {'type': 'text/css'})
             styles = list(filter(lambda style: style.get('href'), styles))
             with ThreadPoolExecutor() as executor:
                 values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda style: (style, 'href', False), styles)))
                 result.extend(values)
+
+        if save_to_file:
+            file_handler = FileHandler(file_path)
+            if file_handler.filetype == 'csv':
+                url_lists = slice_iterable(result, 1)
+                detailed_url_list = [('NO', 'URLS')]
+                detailed_url_list.extend([ (c + 1, url_lists[c][0]) for c in range(len(url_lists)) ])
+                file_handler.write_to_file(detailed_url_list)
+            else:
+                for item in result:
+                    file_handler.write_to_file(f"{item}\n\n")
         return result
 
 
-    def get_scripts(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+    def get_scripts(self, url: str, save_to_file: bool = False, file_path: str = "./scripts.txt") -> List[str]:
         """
         Gets all the scripts from the given url.
 
@@ -1014,14 +1037,15 @@ class BS4WebScraper:
         Args:
             - url (str): Url to get the scripts from.
             - save_to_file (bool, optional): Whether to save the scripts to a file. Defaults to False.
-            - file_format (str, optional): File format to save the scripts to. Defaults to "csv".
-            Available file formats are: csv, json, txt, xlsx.
+            - file_path (str, optional): File to save the links to. Defaults to "./scripts.txt".
+            Available file formats are: csv, txt, doc, docx, pdf...
         """
         if not isinstance(save_to_file, bool):
-            raise ValueError("Invalid type for `save_as_file`")
-        if not isinstance(file_format, str):
-            raise ValueError("Invalid type for `save_as`")
+            raise TypeError("Invalid type for `save_as_file`")
+        if not isinstance(file_path, str):
+            raise TypeError("Invalid type for `save_as`")
         result = []
+        self.set_base_url(url)
         response = self._make_request(url)
         if response:
             soup = BeautifulSoup(response.content, self.parser)
@@ -1030,10 +1054,21 @@ class BS4WebScraper:
             with ThreadPoolExecutor() as executor:
                 values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda script: (script, 'src', False), scripts)))
                 result.extend(values)
+        
+        if save_to_file:
+            file_handler = FileHandler(file_path)
+            if file_handler.filetype == 'csv':
+                url_lists = slice_iterable(result, 1)
+                detailed_url_list = [('NO', 'URLS')]
+                detailed_url_list.extend([ (c + 1, url_lists[c][0]) for c in range(len(url_lists)) ])
+                file_handler.write_to_file(detailed_url_list)
+            else:
+                for item in result:
+                    file_handler.write_to_file(f"{item}\n\n")
         return result
 
     
-    def get_fonts(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+    def get_fonts(self, url: str, save_to_file: bool = False, file_path: str = "./fonts.txt") -> List[str]:
         """
         Gets all the fonts from the given url.
 
@@ -1042,14 +1077,15 @@ class BS4WebScraper:
         Args:
             - url (str): Url to get the fonts from.
             - save_to_file (bool, optional): Whether to save the fonts to a file. Defaults to False.
-            - file_format (str, optional): File format to save the fonts to. Defaults to "csv".
-            Available file formats are: csv, json, txt, xlsx.
+            - file_path (str, optional): File to save the links to. Defaults to "./fonts.txt".
+            Available file formats are: csv, txt, doc, docx, pdf...
         """
         if not isinstance(save_to_file, bool):
-            raise ValueError("Invalid type for `save_as_file`")
-        if not isinstance(file_format, str):
-            raise ValueError("Invalid type for `save_as`")
+            raise TypeError("Invalid type for `save_as_file`")
+        if not isinstance(file_path, str):
+            raise TypeError("Invalid type for `save_as`")
         result = []
+        self.set_base_url(url)
         response = self._make_request(url)
         if response:
             soup = BeautifulSoup(response.content, self.parser)
@@ -1061,10 +1097,21 @@ class BS4WebScraper:
             with ThreadPoolExecutor() as executor:
                 values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda font: (font, 'href', False), fonts)))
                 result.extend(values)
+
+        if save_to_file:
+            file_handler = FileHandler(file_path)
+            if file_handler.filetype == 'csv':
+                url_lists = slice_iterable(result, 1)
+                detailed_url_list = [('NO', 'URLS')]
+                detailed_url_list.extend([ (c + 1, url_lists[c][0]) for c in range(len(url_lists)) ])
+                file_handler.write_to_file(detailed_url_list)
+            else:
+                for item in result:
+                    file_handler.write_to_file(f"{item}\n\n")
         return result
 
     
-    def get_images(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+    def get_images(self, url: str, save_to_file: bool = False, file_path: str = "./images.txt") -> List[str]:
         """
         Gets all the images from the given url.
 
@@ -1073,14 +1120,15 @@ class BS4WebScraper:
         Args:
             - url (str): Url to get the images from.
             - save_to_file (bool, optional): Whether to save the images to a file. Defaults to False.
-            - file_format (str, optional): File format to save the images to. Defaults to "csv".
-            Available file formats are: csv, json, txt, xlsx.
+            - file_path (str, optional): File to save the links to. Defaults to "./images.txt".
+            Available file formats are: csv, txt, doc, docx, pdf...
         """
         if not isinstance(save_to_file, bool):
-            raise ValueError("Invalid type for `save_as_file`")
-        if not isinstance(file_format, str):
-            raise ValueError("Invalid type for `save_as`")
+            raise TypeError("Invalid type for `save_as_file`")
+        if not isinstance(file_path, str):
+            raise TypeError("Invalid type for `save_as`")
         result = []
+        self.set_base_url(url)
         response = self._make_request(url)
         if response:
             soup = BeautifulSoup(response.content, self.parser)
@@ -1089,10 +1137,21 @@ class BS4WebScraper:
             with ThreadPoolExecutor() as executor:
                 values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda image: (image, 'src', False), images)))
                 result.extend(values)
+
+        if save_to_file:
+            file_handler = FileHandler(file_path)
+            if file_handler.filetype == 'csv':
+                url_lists = slice_iterable(result, 1)
+                detailed_url_list = [('NO', 'URLS')]
+                detailed_url_list.extend([ (c + 1, url_lists[c][0]) for c in range(len(url_lists)) ])
+                file_handler.write_to_file(detailed_url_list)
+            else:
+                for item in result:
+                    file_handler.write_to_file(f"{item}\n\n")
         return result
 
 
-    def get_videos(self, url: str, save_to_file: bool = False, file_format: str = "csv") -> List[str]:
+    def get_videos(self, url: str, save_to_file: bool = False, file_path: str = "./videos.txt") -> List[str]:
         """
         Gets all the videos from the given url.
 
@@ -1101,14 +1160,15 @@ class BS4WebScraper:
         Args:
             - url (str): Url to get the videos from.
             - save_to_file (bool, optional): Whether to save the videos to a file. Defaults to False.
-            - file_format (str, optional): File format to save the videos to. Defaults to "csv".
-            Available file formats are: csv, json, txt, xlsx.
+            - file_path (str, optional): File to save the links to. Defaults to "./videos.txt".
+            Available file formats are: csv, txt, doc, docx, pdf...
         """
         if not isinstance(save_to_file, bool):
-            raise ValueError("Invalid type for `save_as_file`")
-        if not isinstance(file_format, str):
-            raise ValueError("Invalid type for `save_as`")
+            raise TypeError("Invalid type for `save_as_file`")
+        if not isinstance(file_path, str):
+            raise TypeError("Invalid type for `save_as`")
         result = []
+        self.set_base_url(url)
         response = self._make_request(url)
         if response:
             soup = BeautifulSoup(response.content, self.parser)
@@ -1117,12 +1177,23 @@ class BS4WebScraper:
             with ThreadPoolExecutor() as executor:
                 values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda video: (video, 'src', False), videos)))
                 result.extend(values)
+
+        if save_to_file:
+            file_handler = FileHandler(file_path)
+            if file_handler.filetype == 'csv':
+                url_lists = slice_iterable(result, 1)
+                detailed_url_list = [('NO', 'URLS')]
+                detailed_url_list.extend([ (c + 1, url_lists[c][0]) for c in range(len(url_lists)) ])
+                file_handler.write_to_file(detailed_url_list)
+            else:
+                for item in result:
+                    file_handler.write_to_file(f"{item}\n\n")
         return result
 
 
     def _get_soup_element(self, element: Tag, src: str, download: bool = True):
         '''
-        Get the element src and download the file.
+        Get the element src and download the file If `download` is set to True.
 
         Args:
             element (Tag): Element to be checked.
@@ -1130,7 +1201,7 @@ class BS4WebScraper:
         
         '''
         if not isinstance(element, Tag):
-            raise ValueError('`element` should be of type Tag')
+            raise TypeError('`element` should be of type Tag')
 
         element_src: str = element.attrs.get(src)
         if element.name.lower() == 'use':
@@ -1151,7 +1222,7 @@ class BS4WebScraper:
                 actual_url = f"http://{url_obj.url}"
             else:
                 actual_url = urljoin(_base_url, url_obj.url)
-
+            
             actual_url_obj = parse_url(actual_url)
             _base_url_obj = parse_url(_base_url)
 
@@ -1174,7 +1245,7 @@ class BS4WebScraper:
             soup (BeautifulSoup): BeautifulSoup object to be scraped.
         '''
         if not isinstance(soup, BeautifulSoup):
-            raise ValueError("`soup` should be of type BeautifulSoup")
+            raise TypeError("`soup` should be of type BeautifulSoup")
         
         scrapable_tags = self.scrapable_tags
         elements: ResultSet = None
@@ -1206,7 +1277,7 @@ class BS4WebScraper:
         
         '''
         if not isinstance(link, Tag):
-            raise ValueError('`link` should be of type Tag')
+            raise TypeError('`link` should be of type Tag')
         if not link.name == 'a':
             raise ValueError('`link` should be an HTML "a" tag')
 
@@ -1245,7 +1316,3 @@ class BS4WebScraper:
         return (actual_url, storage_path, html_filename)
 
 
-
-
-if "__name__" == "__main__":
-    bs4_base_scraper = BS4WebScraper()
