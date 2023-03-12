@@ -38,7 +38,7 @@ class BS4WebScraper:
         >>> bs4_scraper = BS4WebScraper(parser='lxml', html_filename='google.html',
                             no_of_requests_before_pause=50, scrape_session_pause_duration='auto',
                             base_storage_dir='./google', storage_path='/', 
-                            log_filename='google.log', ...)
+                            log_filepath='google.log', ...)
         >>> bs4_scraper.scrape(url='https://www.google.com', scrape_depth=0)
             'google.html' saves to './google/google.html'
             A log file 'google.log' is created in the './google' directory
@@ -82,10 +82,10 @@ class BS4WebScraper:
     @param str `storage_path`: Path where the base(index) HTML file will be saved with respect to the `base_storage_dir`.
     Defaults to directly inside the `base_storage_dir`.
 
-    @param str | path `log_filename`: Name of the file logs will be written into. Defaults to '<self.__class__.__name__.lower()>.log'.
-    This can also be a path to a directory in which the log file should be saved or the path to an already existing log file.
+    @param str `log_filepath`: Name or path (relative or absolute) of the file logs will be written into. Defaults to '<self.__class__.__name__.lower()>.log'.
+    This can also be a path to an already existing log file.
     #### For instance:
-    >>> bs4_scraper = BS4WebScraper(..., log_filename="/<directory_path>/<filename>/")
+    >>> bs4_scraper = BS4WebScraper(..., log_filepath="/<directory_path>/<filename>/")
 
     @param str `translation_engine`: The translation engine to use for translation. Case sensitive. Defaults to 'google'. This can be any of the supported translation engines.
     If the translation engine is not supported, the default translation engine will be used. See `translators` package for more information or do:
@@ -189,7 +189,7 @@ class BS4WebScraper:
     def __init__(self, parser: str = 'lxml', html_filename: str = "index.html", 
                 no_of_requests_before_pause: int = 20, scrape_session_pause_duration: int | float | Any = "auto",
                 max_no_of_retries: int = 3, base_storage_dir: str = '.', storage_path: str = '', 
-                log_filename: str | None = None, translation_engine: str | None = 'default') -> None:
+                log_filepath: str | None = None, translation_engine: str | None = 'default') -> None:
         """
         Initializes the BS4WebScraper class instance.
         """
@@ -212,8 +212,8 @@ class BS4WebScraper:
             raise TypeError('The only accepted string value for `scrape_session_pause_duration` is `auto`.')
         if scrape_session_pause_duration == 'auto':
             scrape_session_pause_duration = max(math.ceil(0.542 * no_of_requests_before_pause), 5)
-        if log_filename and not isinstance(log_filename, str):
-            raise TypeError('`log_filename` should be of type str')
+        if log_filepath and not isinstance(log_filepath, str):
+            raise TypeError('`log_filepath` should be of type str')
 
         if translation_engine and not isinstance(translation_engine, str):
             raise TypeError('`translation_engine` should be of type str')
@@ -222,14 +222,14 @@ class BS4WebScraper:
             raise Exception("Unsupported translation engine")
 
         
-        if log_filename:
-            log_filename.replace('/', '\\')
-            if '\\' in log_filename:
-                os.makedirs(os.path.dirname(log_filename), exist_ok=True)
-            self.logger = Logger(name=f"Logger for {self.__class__.__name__}", log_filename=log_filename)
+        if log_filepath:
+            log_filepath.replace('/', '\\')
+            if '\\' in log_filepath:
+                os.makedirs(os.path.dirname(log_filepath), exist_ok=True)
+            self.logger = Logger(name=f"Logger for {self.__class__.__name__}", log_filepath=log_filepath)
         else:
             self.logger = Logger(name=f"Logger for {self.__class__.__name__}", 
-                                    log_filename=self.__class__.__name__.lower())
+                                    log_filepath=self.__class__.__name__.lower())
         self.logger.set_base_level('INFO')
         self.logger.to_console = True
 
@@ -788,7 +788,8 @@ class BS4WebScraper:
             return 'href'
         
 
-    def download_url(self, url: str, save_as: str | None = None, save_to: str | None = None, check_ext: bool = True):
+    def download_url(self, url: str, save_as: str | None = None, save_to: str | None = None, 
+                        check_ext: bool = True, unique_if_query_params: bool = False):
         '''
         Download file from the given url. Saves the file in a storage path in `self.base_storage_dir`.
 
@@ -799,6 +800,7 @@ class BS4WebScraper:
             - save_as Optional[str]: Name of the file to be downloaded or name with which the file should be saved.
             - save_to Optional[str]: Path to the directory where the file should be saved in `self.base_storage_dir`.
             - check_ext (bool, optional): Whether to check for extension in the url and use it for filename validation. Defaults to True.
+            - unique_if_query_params (bool, optional): Whether to add a unique string to the filename if the url has query parameters. Defaults to False.
         
         #### NOTE: ::
             - #### If `save_as` is not provided, the filename will be extracted from the url.
@@ -819,6 +821,8 @@ class BS4WebScraper:
             raise TypeError('`check_ext` should be of type bool')
         if save_to and not isinstance(save_to, str):
             raise TypeError('`save_to` should be of type str')
+        if not isinstance(unique_if_query_params, bool):
+            raise TypeError('`unique_if_query_params` should be of type bool')
         if not url:
             raise ValueError('`url` is required.')
         if not isinstance(url, str):
@@ -850,8 +854,8 @@ class BS4WebScraper:
         has_query_params = False
         response = None
         downloaded_file = None
-        save_to = save_to.replace('/', '\\').strip()
-        storage_path = save_to or ''
+        save_to = save_to.replace('/', '\\').strip() if save_to else ''
+        storage_path = save_to 
         # check if element src has query params
         if url_obj.query:
             has_query_params = True
@@ -863,8 +867,10 @@ class BS4WebScraper:
             storage_path = storage_path[1:] if storage_path.startswith('\\') else storage_path        
                 
         if has_query_params and (url_obj.query not in self.url_query_params.keys()):
-            filename = generate_unique_filename(filename)
-        elif has_query_params and  (url_obj.query in self.url_query_params.keys()):
+            if unique_if_query_params is True:
+                filename = generate_unique_filename(filename)
+                
+        elif has_query_params and (url_obj.query in self.url_query_params.keys()):
             s_path = self.url_query_params[url_obj.query]
             return s_path, downloaded_file, s_path.split('\\')[-1]
             
@@ -887,8 +893,8 @@ class BS4WebScraper:
         return s_path, downloaded_file, filename
         
 
-    def download_urls(self, urls: Iterable[Dict[str, str]],
-                            save_to: str | None = None, check_ext: bool = True, fast_download: bool = False):
+    def download_urls(self, urls: Iterable[Dict[str, str]], save_to: str | None = None, 
+                        check_ext: bool = True, fast_download: bool = False, unique_if_query_params: bool = False):
         '''
         Download files from the given urls using the `download_url` method. Saves the files in a storage path in `self.base_storage_dir`.
 
@@ -899,6 +905,7 @@ class BS4WebScraper:
             - save_to Optional[str]: Path to the directory where the file should be saved in `self.base_storage_dir`.
             - check_ext (bool, optional): Whether to check for extension in the url and use it for filename validation. Defaults to True.
             Check the doc string of `download_url` for more info on setting this value.
+            - unique_if_query_params (bool, optional): Whether to generate a unique filename if the any of the urls has query params. Defaults to False.
             - fast_download (bool, optional): Whether to download the urls in parallel. Defaults to False. 
             If the number or urls exceed 200 then fast download wont be used to avoid sending high frequency requests to the server.
 
@@ -914,14 +921,18 @@ class BS4WebScraper:
             raise ValueError('`urls` is required.')
         if not isinstance(urls, Iterable):
             raise TypeError('`urls` should be of type Iterable[dict[str, str]]')
-        
+        if not isinstance(unique_if_query_params, bool):
+            raise TypeError('`unique_if_query_params` should be of type bool')
+        if not isinstance(fast_download, bool):
+            raise TypeError('`fast_download` should be of type bool')
+
         urls = list(filter(lambda url: isinstance(url, dict) and any(url), urls))
 
         if len(urls) < 1:
             raise ValueError("No valid url was found in `urls`")
 
         results = []
-        params = {'save_to': save_to, 'check_ext': check_ext}
+        params = {'save_to': save_to, 'check_ext': check_ext, 'unique_if_query_params': unique_if_query_params}
 
         urls_download_params = map(lambda dict: {**params, **dict}, urls) 
         urls_download_params = list(urls_download_params)
@@ -1198,6 +1209,7 @@ class BS4WebScraper:
         Args:
             element (Tag): Element to be checked.
             src (str): Element src attribute.
+            download (bool, optional): Whether to download the file. Defaults to True.
         
         '''
         if not isinstance(element, Tag):
@@ -1228,7 +1240,7 @@ class BS4WebScraper:
 
             # Only scrape internal links, that is, links associated with the website being scraped only.
             if download and (_base_url_obj.netloc and actual_url_obj.netloc) and _base_url_obj.netloc in actual_url_obj.netloc:
-                storage_path, _ , _= self.download_url(url=actual_url, check_ext=False)
+                storage_path, _ , _= self.download_url(url=actual_url, check_ext=False, unique_if_query_params=True)
 
                 # change the element's src to be compatible with the scraped website
                 if storage_path:
@@ -1274,7 +1286,7 @@ class BS4WebScraper:
         
         Args:
             link (Tag): Link to be scraped.
-        
+            download (bool, optional): Whether to download the file. Defaults to True.
         '''
         if not isinstance(link, Tag):
             raise TypeError('`link` should be of type Tag')
@@ -1302,7 +1314,7 @@ class BS4WebScraper:
 
             # Only scrape internal links, that is, links associated with the website being scraped only.
             if download and (_base_url_obj.netloc and actual_url_obj.netloc) and _base_url_obj.netloc in actual_url_obj.netloc:
-                storage_path, new_file, html_filename = self.download_url(url=actual_url, save_as=html_filename, check_ext=False)
+                storage_path, new_file, html_filename = self.download_url(url=actual_url, save_as=html_filename, check_ext=False, unique_if_query_params=True)
                 if new_file:
                     new_soup = BeautifulSoup(new_file.read(), self.parser)
                     self._get_associated_files(new_soup)

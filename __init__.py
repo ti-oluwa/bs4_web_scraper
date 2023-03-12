@@ -48,7 +48,9 @@ __requires__ = ['beautifulsoup4', 'requests', 'translators', 'lxml', 'html5lib',
 
 
 from bs4_web_scraper.scripts.scraper import BS4WebScraper
-from bs4_web_scraper.scripts import translate, utils, help
+from bs4_web_scraper.scripts import translate
+from bs4_web_scraper.scripts import help
+from bs4_web_scraper.scripts import utils
 
 
 
