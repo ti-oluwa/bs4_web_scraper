@@ -104,7 +104,8 @@ class Logger:
     #### Parameters:
     @param `name` (str): The name of the logger.
 
-    @param `log_filename` (str): The name of the log file to log messages to.
+    @param `log_filepath` (str): The name or path of the log file to log messages into. It can be a relative or absolute path.
+    If the file does not exist, it will be created.
 
     #### Attributes:
     @attr `_base_level` (logging.LEVEL): The base level for logging message.
@@ -121,21 +122,22 @@ class Logger:
     _base_level = logging.NOTSET
     _format: str = "%(asctime)s - %(levelname)s - %(message)s"
     date_format: str = "%d/%m/%Y %H:%M:%S (%Z)"
-    file_mode: str = 'a'
+    file_mode: str = 'a+'
     to_console: str = False
 
-    def __init__(self, name: str, log_filename: str) -> None:
+    def __init__(self, name: str, log_filepath: str) -> None:
         if not isinstance(name, str):
             raise TypeError('Invalid argument type for `name`')
-        if not isinstance(log_filename, str):
-            raise TypeError('Invalid argument type for `log_filename`')
+        if not isinstance(log_filepath, str):
+            raise TypeError('Invalid argument type for `log_filepath`')
 
-        _, ext = os.path.splitext(log_filename)
+        log_filepath = os.path.abspath(log_filepath)
+        _, ext = os.path.splitext(log_filepath)
         if ext and ext != '.log':
             raise ValueError('Invalid extension type for log file')
         if not ext:
-            log_filename = f"{log_filename}.log"
-        self.filename = log_filename
+            log_filepath = f"{log_filepath}.log"
+        self.filename = log_filepath
 
         self._logger = logging.getLogger(name)
 
@@ -236,7 +238,6 @@ class Logger:
         if not isinstance(message, str):
             TypeError("`message` should be of type str")
         
-        self._update_config()
         self._logger.info(msg=message)
     
     def log_debug(self, message: str) -> None:
@@ -246,7 +247,6 @@ class Logger:
         if not isinstance(message, str):
             TypeError("`message` should be of type str")
 
-        self._update_config()
         self._logger.debug(msg=message)
     
     def log_error(self, message: str) -> None:
@@ -256,7 +256,6 @@ class Logger:
         if not isinstance(message, str):
             TypeError("`message` should be of type str")
             
-        self._update_config()
         self._logger.error(msg=message)
 
     def log_warning(self, message: str) -> None:
@@ -266,7 +265,6 @@ class Logger:
         if not isinstance(message, str):
             TypeError("`message` should be of type str")
             
-        self._update_config()
         self._logger.warning(msg=message)
     
     def log_critical(self, message: str) -> None:
@@ -276,7 +274,6 @@ class Logger:
         if not isinstance(message, str):
             TypeError("`message` should be of type str")
             
-        self._update_config()
         self._logger.critical(msg=message)
         
 
