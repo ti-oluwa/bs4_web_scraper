@@ -65,6 +65,7 @@ class BS4WebScraper:
     @param str `html_filename`: Default name used to save '*.html' files.
 
     @param int `no_of_requests_before_pause`: Defines the number of requests that can be made before a pause is taken.
+    This should not exceed 50 to avoid high frequency requests. The upper limit is 100.
     This is implemented to regulate the request rate to websites in order to avoid hitting the website's server at very high rates
     which can either to lead to a 429 response code, Permission denied error or complete access block. Default is 20.
 

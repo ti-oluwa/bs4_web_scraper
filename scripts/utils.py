@@ -298,7 +298,8 @@ class RequestLimitSetting:
     #### Attributes:
     @attr bool `request_paused`: is True if requests are paused.
 
-    @attr int `max_request_count_per_second`: returns the value provided for :param `request_count`.
+    @attr int `max_request_count_per_second`: returns the value provided for :param `request_count`. It should be within range
+    1 - 100.
 
     @attr int `no_of_available_retries`: Maximum number of times a failed request will be retried before moving on.
 
@@ -330,9 +331,10 @@ class RequestLimitSetting:
     def __setattr__(self, __name: str, __value: Any) -> None:
         if __name == "pause_duration" and __value < 5:
             raise ValueError("`pause_duration` cannot be less than 5 seconds")
-        if __name == "max_request_count_per_second" and __value == 0:
-            raise ValueError("`max_request_count_per_second` cannot be 0")
+        if __name == "max_request_count_per_second" and (__value < 1 or __value > 100):
+            raise ValueError("`max_request_count_per_second` cannot be less than 1 or greater than 100")
         return super().__setattr__(__name, __value)
+
 
     def request_made(self) -> None:
         '''Registers that a request has been made'''
@@ -363,19 +365,23 @@ class RequestLimitSetting:
         '''Registers a request response error.'''
         self.no_of_available_retries -= 1
 
+
     def reset_max_retry(self) -> None:
         '''Resets the the maximum number of retries to the default provided value.'''
         self.no_of_available_retries = self.max_retries
+
 
     @property
     def can_make_requests(self) -> bool:
         '''Returns if requests can be made, if self.request_paused is True, returns False'''
         return (not self.requests_paused)
 
+
     @property
     def can_retry(self) -> bool:
         '''Returns True if the maximum number of retries has not been exceeded.'''
         return self.no_of_available_retries > 0
+
 
     def pause(self) -> None:
         '''Disallows request making for the specified pause duration.'''
@@ -475,12 +481,14 @@ class FileHandler:
             self.file = open(self.filepath, mode=mode, encoding=self.encoding)
         return self.file
 
+
     def _close_file(self) -> None:
         '''
         Closes the file.
         '''
         self.file.close()
         return None
+
 
     def read_from_file(self, read_mode: str | None = None) -> Any:
         '''
