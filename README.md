@@ -210,7 +210,7 @@ from bs4_web_scraper.utils import class_name
 - [Translators](https://pypi.org/project/translators/)
 
 
-### Contributors and feedbacks are welcome. For feedbacks, please open an issue or contact me at tioluwa.dev@gmail.com or on twitter @ti_oluwa_
+### Contributors and feedbacks are welcome. For feedbacks, please open an issue or contact me at tioluwa.dev@gmail.com or on twitter [@ti_oluwa_](https://twitter.com/ti_oluwa_)
 
 ### To contribute, please fork the repo and submit a pull request
 
