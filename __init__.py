@@ -44,13 +44,14 @@ __description__ = 'A web scraper that uses BeautifulSoup4 to scrape web pages an
 __keywords__ = 'web scraper, bs4, beautifulsoup4, web scraping, web scraping with python, web scraping with bs4, web scraping with beautifulsoup4, web scraping with translation, web scraping with translation to other languages, web scraping with translation to other languages with python, web scraping with translation to other languages with bs4, web scraping with translation to other languages with beautifulsoup4, web scraping with translation to other languages with python and bs4, web scraping with translation to other languages with python and beautifulsoup4,'
 __maintainer__ = 'tioluwa'
 __maintainer_email__ = 'tioluwa.dev@gmail.com'
-__requires__ = ['beautifulsoup4', 'requests', 'translators', 'lxml', 'html5lib', 'urllib3', 'pytz', 'soupsieve']
+__requires__ = [
+    'beautifulsoup4', 'requests', 'translators', 'lxml', 
+    'html5lib', 'urllib3', 'pytz', 'soupsieve', 'pyyaml',
+    'toml',
+]
 
 
 from bs4_web_scraper.scripts.scraper import BS4WebScraper
 from bs4_web_scraper.scripts import translate
 from bs4_web_scraper.scripts import help
 from bs4_web_scraper.scripts import utils
-
-
-

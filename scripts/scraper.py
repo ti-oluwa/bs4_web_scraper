@@ -122,8 +122,6 @@ class BS4WebScraper:
 
     Attributes:
     -----------
-    @attr dict `supported_languages`: A dictionary of all languages supported by the chosen translation engine.
-
     @attr str `_base_url`: The base url of the website being scraped. The base url is the url that will be used to construct the absolute url of all relative urls in a website.
 
     @attr int `_level_reached`: The depth or number of levels successfully scraped.
@@ -1000,9 +998,9 @@ class BS4WebScraper:
 
     def get_styles(self, url: str, save_to_file: bool = False, file_path: str = "./styles.txt") -> List[str]:
         """
-        Gets all the styles from the given url.
+        Gets all the style links from the given url.
 
-        Returns a list of styles and saves the styles to a file if `save_to_file` is set to True.
+        Returns a list of style links and saves the links to a file if `save_to_file` is set to True.
 
         Args:
             - url (str): Url to get the styles from.
@@ -1041,9 +1039,9 @@ class BS4WebScraper:
 
     def get_scripts(self, url: str, save_to_file: bool = False, file_path: str = "./scripts.txt") -> List[str]:
         """
-        Gets all the scripts from the given url.
+        Gets all the script links from the given url.
 
-        Returns a list of scripts and saves the scripts to a file if `save_to_file` is set to True.
+        Returns a list of script links and saves the links to a file if `save_to_file` is set to True.
 
         Args:
             - url (str): Url to get the scripts from.
@@ -1081,9 +1079,9 @@ class BS4WebScraper:
     
     def get_fonts(self, url: str, save_to_file: bool = False, file_path: str = "./fonts.txt") -> List[str]:
         """
-        Gets all the fonts from the given url.
+        Gets all the font links from the given url.
 
-        Returns a list of fonts and saves the fonts to a file if `save_to_file` is set to True.
+        Returns a list of font link and saves the links to a file if `save_to_file` is set to True.
 
         Args:
             - url (str): Url to get the fonts from.
@@ -1124,9 +1122,9 @@ class BS4WebScraper:
     
     def get_images(self, url: str, save_to_file: bool = False, file_path: str = "./images.txt") -> List[str]:
         """
-        Gets all the images from the given url.
+        Gets all the image links from the given url.
 
-        Returns a list of images and saves the images to a file if `save_to_file` is set to True.
+        Returns a list of image links and saves the links to a file if `save_to_file` is set to True.
 
         Args:
             - url (str): Url to get the images from.
@@ -1164,9 +1162,9 @@ class BS4WebScraper:
 
     def get_videos(self, url: str, save_to_file: bool = False, file_path: str = "./videos.txt") -> List[str]:
         """
-        Gets all the videos from the given url.
+        Gets all the video links from the given url.
 
-        Returns a list of videos and saves the videos to a file if `save_to_file` is set to True.
+        Returns a list of video links and saves the links to a file if `save_to_file` is set to True.
 
         Args:
             - url (str): Url to get the videos from.
@@ -1201,6 +1199,47 @@ class BS4WebScraper:
                     file_handler.write_to_file(f"{item}\n\n")
         return result
 
+
+    def get_audios(self, url: str, save_to_file: bool = False, file_path: str = "./audios.txt") -> List[str]:
+        '''
+        Gets all the audio links from the given url.
+
+        Returns a list of audio links and saves the links to a file if `save_to_file` is set to True.
+
+        Args:
+            - url (str): Url to get the audios from.
+            - save_to_file (bool, optional): Whether to save the audios to a file. Defaults to False.
+            - file_path (str, optional): File to save the links to. Defaults to "./audios.txt".
+            Available file formats are: csv, txt, doc, docx, pdf...
+        '''
+
+        if not isinstance(save_to_file, bool):
+            raise TypeError("Invalid type for `save_as_file`")
+        if not isinstance(file_path, str):
+            raise TypeError("Invalid type for `save_as`")
+        result = []
+        self.set_base_url(url)
+        response = self._make_request(url)
+        if response:
+            soup = BeautifulSoup(response.content, self.parser)
+            audios = soup.find_all('audio')
+            audios = list(filter(lambda audio: audio.get('src'), audios))
+            with ThreadPoolExecutor() as executor:
+                values = executor.map(lambda arg: self._get_soup_element(*arg), list(map(lambda audio: (audio, 'src', False), audios)))
+                result.extend(values)
+
+        if save_to_file:
+            file_handler = FileHandler(file_path)
+            if file_handler.filetype == 'csv':
+                url_lists = slice_iterable(result, 1)
+                detailed_url_list = [('NO', 'URLS')]
+                detailed_url_list.extend([ (c + 1, url_lists[c][0]) for c in range(len(url_lists)) ])
+                file_handler.write_to_file(detailed_url_list)
+            else:
+                for item in result:
+                    file_handler.write_to_file(f"{item}\n\n")
+        return result
+        
 
     def _get_soup_element(self, element: Tag, src: str, download: bool = True):
         '''
