@@ -152,6 +152,22 @@ bs4_scraper.scrape(url="https://www.websitewithauth.com", scrape_depth=0, creden
 
 ```
 
+You can also authenticate the scraper before scraping by passing the `credentials` parameter to the `authenticate` method. The following example shows how to authenticate the scraper before scraping.
+
+```python
+
+# Authenticating the scraper before scraping
+bs4_scraper.authenticate(credentials=credentials)
+bs4_scraper.scrape(url="https://www.websitewithauth.com", scrape_depth=0)
+
+# or in the case of downloading data from a web page that requires authentication
+bs4_scraper.authenticate(credentials=credentials)
+bs4_scraper.download_url(url="https://www.websitewithauth.com/download/example.mp4", save_as="example.mp4",             save_to="downloads")
+
+# run help(bs4_scraper.downloaded_url) for more information on the download_url method
+
+```
+
 NOTE: `credentials` should always take the form of a dictionary with the following keys: `auth_url`, `auth_username_field`, `auth_password_field`, `auth_username`, `auth_password`.
 
 To get a quick template for the `credentials` dictionary, do:
