@@ -162,7 +162,7 @@ bs4_scraper.scrape(url="https://www.websitewithauth.com", scrape_depth=0)
 
 # or in the case of downloading data from a web page that requires authentication
 bs4_scraper.authenticate(credentials=credentials)
-bs4_scraper.download_url(url="https://www.websitewithauth.com/download/example.mp4", save_as="example.mp4",             save_to="downloads")
+bs4_scraper.download_url(url="https://www.websitewithauth.com/download/example.mp4", save_as="example.mp4", save_to="downloads")
 
 # run help(bs4_scraper.downloaded_url) for more information on the download_url method
 
