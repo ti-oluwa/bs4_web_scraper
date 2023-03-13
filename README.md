@@ -197,7 +197,7 @@ For information on how to use these classes, do:
 
 ```python
 
-from bs4_web_scraper.utils import class_name
+from bs4_web_scraper.scripts.utils import class_name
 
 >>> help(class_name)
 
