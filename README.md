@@ -58,8 +58,8 @@ params = {
     "parser": "html.parser",
     "html_filename": "base.html",
     "log_filepath": "./scrape_log/log.txt",
-    "no_of_requests_before_pause": 30,
-    "scrape_session_pause_duration": 20,
+    "no_of_requests_before_pause": 30, # This should not exceed 50 to avoid high frequency requests. The upper limit is 100
+    "scrape_session_pause_duration": 20, # pause duration in seconds. It is advisable to leave this at its default, "auto".
     "max_no_of_retries": 5,
     "base_storage_dir": "./scraped_data",
     "storage_path": ".",
@@ -208,6 +208,7 @@ For information on how to use these methods, do:
 - `Translator`
 - `FileHandler`
 - `Logger`
+- `RequestLimitSetting`
 
 For information on how to use these classes, do:
 
