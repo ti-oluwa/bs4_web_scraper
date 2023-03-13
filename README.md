@@ -128,7 +128,7 @@ To get a list of the languages supported by the scraper's translation engine, do
 
 ```python
 
-print(bs4_scraper.translator.get_supported_languages())
+print(bs4_scraper.translator.supported_languages)
 
 ```
 
