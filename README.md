@@ -128,7 +128,7 @@ To get a list of the languages supported by the scraper's translation engine, do
 
 ```python
 
-print(bs4_scraper.translator.get_supported_languages())
+print(bs4_scraper.translator.supported_languages)
 
 ```
 
@@ -197,7 +197,7 @@ For information on how to use these classes, do:
 
 ```python
 
-from bs4_web_scraper.utils import class_name
+from bs4_web_scraper.scripts.utils import class_name
 
 >>> help(class_name)
 
