@@ -25,11 +25,11 @@
 
 ## Features
 
-- [x] Web scraping
-- [x] Translation
-- [x] Saving scraped data to a file
-- [x] Downloading data to a file
-- [x] Logging the scraping process
+* Web scraping
+* Translation
+* Saving scraped data to a file
+* Downloading data to a file
+* Logging the scraping process
 
 
 ## Usage
@@ -40,7 +40,7 @@ Before using the scraper, make sure you have an internet connection. The scraper
 
 ```python
 
-from bs4_web_scraper import BS4WebScraper
+from bs4_web_scraper.scraper import BS4WebScraper
 
 ```
 
@@ -76,8 +76,7 @@ bs4_scraper = BS4WebScraper(**params)
 To read more about the instantiation parameters and class attributes, run the following command:
 
 ```python
-
->>> help(BS4WebScraper)
+>>> print(BS4WebScraper.__doc__)
 
 ```
 
@@ -115,10 +114,10 @@ bs4_scraper.scrape(url="https://www.google.com", scrape_depth=0, translate_to="f
 To get a list of available translation engines you can use, do the following:
 
 ```python
+from bs4_web_scraper import translate
 
-from bs4_web_scraper.scripts.help import available_translation_engines
-
-print(available_translation_engines)
+# INTERNET CONNECTION REQUIRED
+print(translate.translation_engines)
 
 ```
 
@@ -174,19 +173,19 @@ To get a quick template for the `credentials` dictionary, do:
 
 ```python
 
-from bs4_web_scraper.scripts.help import bs4_credentials_template
+import bs4_web_scraper
 
-print(bs4_credentials_template)
+print(bs4_web_scraper.credentials_template)
 
 ```
 
-
 ### Other useful methods
 
-The following methods are useful for scraping web page data.
+The following are some useful methods for scraping web data using the scraper class.
 
 - `download_url`
 - `download_urls`
+- `get_all`
 - `get_links`
 - `get_styles`
 - `get_scripts`
@@ -199,7 +198,7 @@ For information on how to use these methods, do:
 
 ```python
 
->>> help(method_name)
+>>> help(bs4_scraper.<method_name>)
 
 ```
 
@@ -213,10 +212,9 @@ For information on how to use these methods, do:
 For information on how to use these classes, do:
 
 ```python
+from bs4_web_scraper.<module_name> import <class_name>
 
-from bs4_web_scraper.scripts.utils import class_name
-
->>> help(class_name)
+>>> help(<class_name>)
 
 ```
 
@@ -227,8 +225,8 @@ from bs4_web_scraper.scripts.utils import class_name
 - [Translators](https://pypi.org/project/translators/)
 
 
-### Contributors and feedbacks are welcome. For feedbacks, please open an issue or contact me at tioluwa.dev@gmail.com or on twitter [@ti_oluwa_](https://twitter.com/ti_oluwa_)
+#### Contributors and feedbacks are welcome. For feedbacks, please open an issue or contact me at tioluwa.dev@gmail.com or on twitter [@ti_oluwa_](https://twitter.com/ti_oluwa_)
 
-### To contribute, please fork the repo and submit a pull request
+#### To contribute, please fork the repo and submit a pull request
 
-### If you find this module useful, please consider giving it a star. Thanks!
+#### If you find this module useful, please consider giving it a star. Thanks!
