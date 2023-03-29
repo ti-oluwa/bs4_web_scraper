@@ -1,4 +1,4 @@
-# bs4_web_scraper
+### bs4_web_scraper
 
 ### __A web scraper based on the BeautifulSoup4 library with translation capabilities.__
 
@@ -193,6 +193,9 @@ The following are some useful methods for scraping web data using the scraper cl
 - `get_images`
 - `get_audios`
 - `get_fonts`
+- `get_pattern`
+- `get_emails`
+- `get_phones`
 
 For information on how to use these methods, do:
 

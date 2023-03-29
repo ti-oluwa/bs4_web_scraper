@@ -59,3 +59,9 @@ credentials_template = {
     'auth_username': '<Username>',
     'auth_password': '<Password>',
 }
+
+
+# NOTE: 
+# 'rra' means 'resource-related-attribute'
+# A 'resource-related-attribute' in this case refers to any HTML tag attribute that points to a resource. Examples of
+# resource-related-attributes include; 'href'(of the <link> tag) and 'src'(of the <img> tag).

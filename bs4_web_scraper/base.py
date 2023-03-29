@@ -20,7 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 from . import utils
 from . import translate
 from .logging import Logger
-from .exceptions import InvalidURLError, UnsupportedLanguageError, FileError
+from .exceptions import (InvalidURLError, UnsupportedLanguageError, FileError, InvalidScrapableTagError)
 from .request_limiter import RequestLimitSetting
 from .file_handler import FileHandler
 
@@ -335,7 +335,78 @@ class BS4BaseScraper:
                 
         return BeautifulSoup(markup, self.parser, **kwargs)
 
+    
+    def make_soup_from_url(self, url: str, **kwargs: Any):
+        """
+        Similar to `make_soup` but a url can be provided instead of markup. 
+        The function will get the url's markup and make a BeautifulSoup with it.
 
+        Returns BeautifulSoup if response from url is OK else returns None.
+
+        Args::
+            url (str): url from which soup will be created
+        """
+        response = self.get(url)
+        if response:
+            return self.make_soup(response.content, **kwargs)
+        return None
+
+
+    # Tail recursive version
+    # def _scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None = None, translate_to: str | None = None) -> None:
+    #     '''
+    #     Main scraping method.
+        
+    #     NOTE:
+    #     * This method is not meant to be called directly. Use the `scrape` method instead.
+    #     * This method is not thread safe. It is not meant to be called by multiple threads.
+    #     * This method is recursive if `scrape_depth` is greater than 1.
+    #     '''
+    #     if translate_to:
+    #         self.translate_to = translate_to
+    #     if self.level_reached == 0:
+    #         self._base_url = self.get_base_url(url)
+    #     if credentials:
+    #         self.set_auth_credentials(credentials)   
+
+    #     # make initial request
+    #     response = self.get(url)
+    #     if response is not None:
+    #         index_file = self.save_to_file(self.html_filename, self.storage_path, content=response.content)
+    #     else:
+    #         raise Exception('Unexpected response: %s' % response)
+
+    #     soup = self.make_soup(index_file)
+    #     # get all ('*js', '*.css', font files, ...)
+    #     self._get_associated_files(soup)
+    #     if scrape_depth > 0:
+    #         # get all links on the page
+    #         links = soup.find_all('a')
+    #         self.log(f'~~~SCRAPING AT LEVEL {self.level_reached + 1}~~~\n')
+    #         with ThreadPoolExecutor() as executor:
+    #             no_of_threads = self._get_suitable_no_threads(len(links))
+    #             self.log(f'NO OF THREADS: {no_of_threads}')
+    #             for link_list in utils.slice_iterable(links, no_of_threads):
+    #                 page_links_details = list(executor.map(self.get_soup_link_tag, link_list))
+
+    #         if self.level_reached == 0:
+    #             self._level_reached += 1  
+    #         # Update base html file with updated link_href, script_src, image_src, href's etc.
+    #         self.log("UPDATING BASE HTML FILE WITH UPDATED ELEMENT ATTRIBUTES\n")
+    #         self.save_to_file(self.html_filename, self.storage_path, content=soup.prettify(formatter='html5', encoding='utf-8'), translate=False)
+    #         scrape_depth -= 1
+
+    #     if scrape_depth > 0:
+    #         self.log(f'~~~SCRAPING AT LEVEL {self.level_reached + 1}~~~\n')
+    #         self._level_reached += 1
+    #         for (url_, storage_path, html_filename) in page_links_details:
+    #             if all((url_, storage_path, html_filename)):
+    #                 url, self.storage_path, self.html_filename = (url_, storage_path, html_filename)
+    #             return self._scrape(url, scrape_depth)
+    #     return None
+
+
+    # Iterative version
     def _scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None = None, translate_to: str | None = None) -> None:
         '''
         Main scraping method.
@@ -343,7 +414,6 @@ class BS4BaseScraper:
         NOTE:
         * This method is not meant to be called directly. Use the `scrape` method instead.
         * This method is not thread safe. It is not meant to be called by multiple threads.
-        * This method is recursive if `scrape_depth` is greater than 1.
         '''
         if translate_to:
             self.translate_to = translate_to
@@ -352,43 +422,40 @@ class BS4BaseScraper:
         if credentials:
             self.set_auth_credentials(credentials)   
 
-        # make initial request
-        response = self._make_request(url)
+        # Scraping 'n' levels (for n >= 0)
+        # Initially, Scrape base level -> 'n = 0'
+        self.log(f'~~~SCRAPING BASE LEVEL~~~\n')
+        response = self.get(url)
         if response is not None:
-            index_file = self._save_to_file(self.html_filename, self.storage_path, content=response.content)
+            index_file = self.save_to_file(self.html_filename, self.storage_path, content=response.content)
         else:
             raise Exception('Unexpected response: %s' % response)
 
         soup = self.make_soup(index_file)
-        # get all ('*js', '*.css', font files, ...)
-        self._get_associated_files(soup)
-        if scrape_depth > 0:
-            # get all links on the page
-            page_links_details = []
-            links = soup.find_all('a')
+        self._get_associated_files(soup) # get all ('*js', '*.css', font files, ...) of first page
+
+        while scrape_depth > 0:
+            # Start scraping at level 'n = n + 1'
+            link_tags = soup.find_all('a') # get all links on the page
             self.log(f'~~~SCRAPING AT LEVEL {self.level_reached + 1}~~~\n')
             with ThreadPoolExecutor() as executor:
-                no_of_threads = self._get_suitable_no_threads(len(links))
+                no_of_threads = self._get_suitable_no_threads(len(link_tags))
                 self.log(f'NO OF THREADS: {no_of_threads}')
-                for link_list in utils.slice_iterable(links, no_of_threads):
-                    details = executor.map(self._get_soup_link, link_list)
-                    page_links_details.extend(details)
-
-            if self.level_reached == 0:
-                self._level_reached += 1  
-            # Update base html file with updated link_href, script_src, image_src, href's etc.
-            self.log("UPDATING BASE HTML FILE WITH UPDATED ELEMENT ATTRIBUTES\n")
-            self._save_to_file(self.html_filename, self.storage_path, content=soup.prettify(formatter='html5', encoding='utf-8'), translate=False)
-   
-        scrape_depth -= 1
-        if scrape_depth > 0:
-            self.log(f'~~~SCRAPING AT LEVEL {self.level_reached + 1}~~~\n')
-            self._level_reached += 1
-            for (url, storage_path, html_filename) in page_links_details:
-                if all((url, storage_path, html_filename)):
-                    self.storage_path = storage_path
-                    self.html_filename = html_filename
-                    return self._scrape(url, scrape_depth)
+                for link_tags_sub_list in utils.slice_iterable(link_tags, no_of_threads):
+                    results = executor.map(lambda link_tag: self.get_soup_link_tag(link_tag, True), link_tags_sub_list)
+            # Finished scraping level 'n = n + 1'
+            scrape_depth -= 1 
+            self._level_reached += 1  
+            # Update html file from which the associated links and files were gotten with soup containing new attributes (link_href, script_src, image_src, href's etc.)
+            self.log("UPDATING HTML FILE WITH UPDATED ELEMENT ATTRIBUTES\n")
+            self.save_to_file(self.html_filename, self.storage_path, content=soup.prettify(formatter='html5', encoding='utf-8'), translate=False)
+        
+            # If `scrape_depth` is still greater than zero, prepare data for scraping next level
+            if scrape_depth > 0:
+                results = filter(lambda result: isinstance(result, tuple) and all(result), results)
+                for (soup, html_filepath, html_filename) in results:
+                    soup, self.storage_path, self.html_filename = (soup, html_filepath, html_filename)
+                    continue
         return None
 
 
@@ -399,12 +466,12 @@ class BS4BaseScraper:
         Scrapes the website provided in the url argument. 
         The scraped content is saved to the `self.storage_path` directory.
 
-        Args: ::
-            url (str): The url of the website or webpage to be scraped.
-            scrape_depth (int, optional): The number of levels deep to scrape. Defaults to 1.
-            credentials (Dict[str, str], optional): Authentication or login details for website. Defaults to None.
-            translate_to (str, optional): Language code for the language scraped content will be translated to. The source language
-            is automatically detected by `self.translator`. Defaults to None.
+        Args::
+        * `url` (str): The url of the website or webpage to be scraped.
+        * `scrape_depth` (int, optional): The number of levels deep to scrape. Defaults to 1.
+        * `credentials` (Dict[str, str], optional): Authentication or login details for website. Defaults to None.
+        * `translate_to` (str, optional): Language code for the language scraped content will be translated to. The source language
+        is automatically detected by `self.translator`. Defaults to None.
         """
         raise NotImplementedError("Oops! You forgot to implement this method. Your method should pass the required arguments to the `_scrape` method.")
 
@@ -443,7 +510,7 @@ class BS4BaseScraper:
         Authenticates the scraper to scrape websites that require authentication.
 
         Args:
-            credentials (Dict[str, str], optional): The authentication credentials. Defaults to None.
+        * `credentials` (Dict[str, str], optional): The authentication credentials. Defaults to None.
         '''
         if not credentials and not (self.auth_credentials or self.auth_url):
             raise Exception('`credentials` must be provided if `self.auth_credentials` or `self.auth_url` have not been set.')
@@ -463,14 +530,14 @@ class BS4BaseScraper:
             self.log('AUTHENTICATION FAILED!!!\n', level='ERROR')
 
 
-    def _make_request(self, url: str) -> requests.Response | None:  
+    def get(self, url: str) -> requests.Response | None:  
         '''
         Makes a GET request to url given, authenticates requests and limits request rate based on limit setting if provided. 
         
         Returns response if status code is OK. Returns None if request is stale(failed even after multiple retries)
 
         Args:
-            url (str): url to make request to.
+        * `url` (str): url to make request to.
         '''  
         url_obj = parse_url(url)
         url = url_obj.url
@@ -486,7 +553,7 @@ class BS4BaseScraper:
             response = self.session.get(url, headers=headers)
             resp_ok = self._handle_response(response)
             if resp_ok is False:
-                return self._make_request(url)
+                return self.get(url)
 
         else:
             if self.request_limit_setting.can_make_requests is True:
@@ -498,12 +565,12 @@ class BS4BaseScraper:
 
                 if resp_ok is False:
                     time.sleep(self.request_limit_setting.pause_duration * 2)
-                    return self._make_request(url)
+                    return self.get(url)
                 elif resp_ok is None:
                     return None
             else:
                 time.sleep(self.request_limit_setting.pause_duration)
-                return self._make_request(url)
+                return self.get(url)
         return response
 
 
@@ -512,7 +579,7 @@ class BS4BaseScraper:
         Returns True if response is OK else False. Returns None is request is stale - cannot be retried.
 
         Args::
-            response (requests.Response): request response.
+        * `response` (requests.Response): request response.
         """
         if response.ok:
             self.log('SUCCESS: REQUEST OK \n')
@@ -538,8 +605,8 @@ class BS4BaseScraper:
 
         Returns the translated content.
 
-        Args:
-            content (str | bytes): The content to translate.
+        Args::
+        * `content` (str | bytes): The content to translate.
         '''
         if not isinstance(content, (str, bytes)):
             raise TypeError("Invalid type for `content`")
@@ -559,7 +626,7 @@ class BS4BaseScraper:
         return content
     
 
-    def _save_to_file(self, filename: str, storage_path: str, content: str | bytes, 
+    def save_to_file(self, filename: str, storage_path: str, content: str | bytes, 
                         mode: str = "wb", encoding: str | None = 'utf-8', translate: bool = True) -> io.TextIOWrapper | io.BufferedWriter:
         '''
         Saves content to file using the specified arguments. 
@@ -568,12 +635,12 @@ class BS4BaseScraper:
         Returns the file object opened in read mode.
 
         Args:
-            filename (str): Name of the file to be created.
-            storage_path (str): Path to the directory where the file will be created in `self.base_storage_dir`.
-            content (str | bytes): Content to be written into the file.
-            mode (str, optional): Mode to be used when creating the file. Defaults to "wb".
-            encoding (str | None, optional): Encoding to be used when creating the file. Defaults to 'utf-8'.
-            translate (bool, optional): Whether to translate the content to the encoding specified. Defaults to True.
+        * `filename` (str): Name of the file to be created.
+        * `storage_path` (str): Path to the directory where the file will be created in `self.base_storage_dir`.
+        * `content` (str | bytes): Content to be written into the file.
+        * `mode` (str, optional): Mode to be used when creating the file. Defaults to "wb".
+        * `encoding` (str | None, optional): Encoding to be used when creating the file. Defaults to 'utf-8'.
+        * `translate` (bool, optional): Whether to translate the content to the encoding specified. Defaults to True.
 
         '''
         if mode in ['rb', 'r']:
@@ -602,25 +669,26 @@ class BS4BaseScraper:
             pass
             
 
-    def _parse_storage_path(self, url_obj: Url, remove_str: str | None = None) -> str:
+    def parse_storage_path_from_Url(self, url_obj: Url, remove_str: str | None = None) -> str:
         '''
-        Returns a suitable storage path from a Url.
+        Returns a suitable storage path from a Url object.
 
         Args:
-            url_obj (Url): Url object to be parsed.
+        * `url_obj` (Url): Url object to be parsed.
         '''
         url_path = url_obj.path or ''
         url_path = url_path.replace(remove_str, '') if remove_str else url_path
         return url_path.replace('/', '\\')
 
 
-    def _get_element_src_by_tag_name(self, tag_name: str) -> str:
+    def get_tag_rra_by_tag_name(self, tag_name: str) -> str:
         '''
         Return the tag attribute that contains the src url/path.
+
         Returns an empty string if tag name is not recognizable.
 
         Args:
-            tag_name (str): Tag name to be checked.
+        * `tag_name` (str): Tag name to be checked.
         
         '''
         tag_name = tag_name.lower()
@@ -639,26 +707,26 @@ class BS4BaseScraper:
 
         Returns a tuple of storage path of the downloaded file, the downloaded file and the downloaded file's name.
 
-        Args:
-            - url (str): Url to be downloaded.
-            - save_as Optional[str]: Name of the file to be downloaded or name with which the file should be saved.
-            - save_to Optional[str]: Path to the directory where the file should be saved in `self.base_storage_dir`.
-            - check_ext (bool, optional): Whether to check for extension in the url and use it for filename validation. Defaults to True.
-            - unique_if_query_params (bool, optional): Whether to add a unique string to the filename if the url has query parameters. Defaults to False.
+        Args::
+        * url (str): Url to be downloaded.
+        * save_as Optional[str]: Name of the file to be downloaded or name with which the file should be saved.
+        * save_to Optional[str]: Path to the directory where the file should be saved in `self.base_storage_dir`.
+        * check_ext (bool, optional): Whether to check for extension in the url and use it for filename validation. Defaults to True.
+        * unique_if_query_params (bool, optional): Whether to add a unique string to the filename if the url has query parameters. Defaults to False.
         
-        #### NOTE: ::
-            - #### If `save_as` is not provided, the filename will be extracted from the url.
-            - #### If `save_to` is not provided, then `save_to` will automatically be the url path.
-            - #### If the url you want to download from does not have an filename with extension, you should set `check_ext` to False and provide a value for `save_as`.
+        #### NOTE::
+        * If `save_as` is not provided, the filename will be extracted from the url.
+        * If `save_to` is not provided, then `save_to` will automatically be the url path.
+        * If the url you want to download from does not have an filename with extension, you should set `check_ext` to False and provide a value for `save_as`.
             
-            An example of a url with a filename and extension is: https://example.com/style.css with 'style' as the name and '.css' as the extension.
-            But a url like https://example.com/ does not have a filename with extension, you should provide a `save_as` name in this case, if not the 
-            download may fail.
+        An example of a url with a filename and extension is: https://example.com/style.css with 'style' as the name and '.css' as the extension.
+        But a url like https://example.com/ does not have a filename with extension, you should provide a `save_as` name in this case, if not the 
+        download may fail.
 
-            - #### If the url already has a filename with extension, but you want to save the file with a different name, you can provide a value for `save_as` and set `check_ext` to False. 
+        * If the url already has a filename with extension, but you want to save the file with a different name, you can provide a value for `save_as` and set `check_ext` to False. 
             Just be careful as this may lead to saving files with no or incorrect file extensions.
 
-        #### Example Usage: ::
+        Example Usage::
             >>> bs4_scraper.download_url(url="https://example.com/", save_as="example.html", save_to="/examples", check_ext="False")
         '''
         url_obj = parse_url(url)
@@ -686,12 +754,12 @@ class BS4BaseScraper:
         has_query_params = False
         response = None
         downloaded_file = None
-        storage_path = save_to.replace('/', '\\').strip() if save_to else ''
+        storage_path = save_to.replace('/', '\\').strip() if save_to is not None else save_to
         # check if element src has query params
         if url_obj.query:
             has_query_params = True
-        if save_to is None:
-            storage_path = self._parse_storage_path(url_obj, remove_str=f"{url_based_name}{url_based_ext}")
+        if storage_path is None:
+            storage_path = self.parse_storage_path_from_Url(url_obj, remove_str=f"{url_based_name}{url_based_ext}")
             # Clean up storage path
             storage_path = storage_path.replace(filename, '') if storage_path.endswith(f"{url_based_name}{url_based_ext}") else storage_path
             storage_path = storage_path[:-1] if storage_path.endswith('\\') else storage_path
@@ -701,7 +769,7 @@ class BS4BaseScraper:
             if unique_if_query_params is True:
                 filename = utils.generate_unique_filename(filename)
                 
-        elif has_query_params and (url_obj.query in self.url_query_params.keys()):
+        if has_query_params and (url_obj.query in self.url_query_params.keys()):
             s_path = self.url_query_params[url_obj.query]
             return s_path, downloaded_file, s_path.split('\\')[-1]
             
@@ -710,12 +778,12 @@ class BS4BaseScraper:
         if not has_query_params or (url_obj.query not in self.url_query_params.keys()):
             # check if file already exists
             if os.path.exists(s_path) is False:
-                response = self._make_request(url)
+                response = self.get(url)
             else:
                 self.log("`%s` ALREADY EXISTS! \n" % s_path)
 
         if response:
-            downloaded_file = self._save_to_file(filename=filename, storage_path=storage_path, content=response.content)
+            downloaded_file = self.save_to_file(filename=filename, storage_path=storage_path, content=response.content)
             if downloaded_file:
                 self.log("`%s` DOWNLOADED! \n" % url)
                 if has_query_params:
@@ -728,38 +796,48 @@ class BS4BaseScraper:
         '''
         Scrapes all the soup tags present in `self._scrapable_tags`
         
-        Args:
-            soup (BeautifulSoup): BeautifulSoup object to be scraped.
+        Args::
+        * `soup` (BeautifulSoup): BeautifulSoup object.
         '''
         if not isinstance(soup, BeautifulSoup):
             raise TypeError("`soup` should be of type BeautifulSoup")
 
-        elements: ResultSet[Tag] = None
         for scrapable_tag in self._scrapable_tags:
-            if len(scrapable_tag.split('|')) == 1:
-                tag_name = scrapable_tag
-                elements = soup.find_all(tag_name)
+            elements: ResultSet[Tag] = []
+            try:
+                if len(scrapable_tag.split('|')) == 1:
+                    tag_name = scrapable_tag
+                    elements.extend(soup.find_all(tag_name))
+                elif len(scrapable_tag.split('|')) == 2:
+                    tag_name = scrapable_tag.split('|')[0]
+                    attrs = json.loads(scrapable_tag.split('|')[1])
+                    elements.extend(soup.find_all(tag_name, attrs))
 
-            elif len(scrapable_tag.split('|')) == 2:
-                tag_name = scrapable_tag.split('|')[0]
-                attrs = json.loads(scrapable_tag.split('|')[1])
-                elements = soup.find_all(tag_name, attrs)
+            except Exception:
+                raise InvalidScrapableTagError(f"Invalid scrapable_tag, `{scrapable_tag}`, found in `self._scrapable_tags`")
 
             if elements:
-                self.log(f'GETTING "{scrapable_tag}" ELEMENTS... \n' )
+                # Remove tags with the same resource-related-attribute
+                src_attrs = []
                 for tag in elements:
-                    self._get_soup_tag(tag)
+                    src = tag.get(self.get_tag_rra_by_tag_name(tag.name))
+                    if src in src_attrs:
+                        elements.remove(tag)
+                    elif src and src not in src_attrs:
+                        src_attrs.append(src)
+                for tag in elements:
+                    self.get_soup_tag_rra(tag, download=True)
         return None
 
 
-    def _get_actual_url_from_src(self, src: str):
+    def get_actual_url_from_rra(self, rra: str):
         '''
-        Parses the url from a bs4.element.Tag src attribute
+        Parses the url from a bs4.element.Tag rra
 
         Args::
-            src (str): bs4.element.Tag.src
+        * `rra` (str): bs4.element.Tag.rra
         '''
-        url_obj = parse_url(src)
+        url_obj = parse_url(rra)
         if (url_obj.scheme and url_obj.netloc):
             actual_url = url_obj.url
         elif url_obj.netloc and not url_obj.scheme:
@@ -774,81 +852,87 @@ class BS4BaseScraper:
         return actual_url
 
 
-    def _get_soup_tag(self, element: Tag, download: bool = True):
+    def get_soup_tag_rra(self, tag: Tag, download: bool = False):
         '''
-        Get the element src and download the file If `download` is set to True.
+        Gets the bs4.element.Tag object 'resource-related-attribute' if it has any.
+        
+        Returns the full resource URL and downloads the resource it points to if `download` is set to True.
 
-        Args:
-            element (Tag): Element to be checked.
-            src (str): Element src attribute.
-            download (bool, optional): Whether to download the file. Defaults to True.
+        Returns None if it has no 'resource-related-attribute'
+
+        A 'resource-related-attribute' in this case refers to any HTML tag attribute that points to a resource. Examples of
+        resource-related-attributes include; 'href'(of the <link> tag) and 'src'(of the <img> tag).
+
+        Args::
+        * `tag` (Tag): tag with resource-related-attribute.
+        * `download` (bool, optional): Whether to download the resource. Defaults to False.
         
         '''
-        if not isinstance(element, Tag):
-            raise TypeError('`element` should be of type bs4.element.Tag')
+        if not isinstance(tag, Tag):
+            raise TypeError('`tag` should be of type bs4.tag.Tag')
 
-        src = self._get_element_src_by_tag_name(element.name)
-        element_src: str = element.get(src, None)
-        if element.name.lower() == 'use':
-            element_src = element_src.split('#')[0]
+        src = self.get_tag_rra_by_tag_name(tag.name)
+        tag_src: str = tag.get(src, None)
+        if tag.name.lower() == 'use':
+            tag_src = tag_src.split('#')[0]
 
-        if element_src:
-            element_src = element_src.replace('..', '').replace('./', '/')
-            if element_src.startswith('//'):
-                element_src = element_src.replace('//', '/')
-            print(element_src)
-            actual_url = self._get_actual_url_from_src(element_src)
-            print(actual_url) #
+        if tag_src:
+            tag_src = tag_src.replace('..', '').replace('./', '/')
+            if tag_src.startswith('//'):
+                tag_src = tag_src.replace('//', '/')
+            actual_url = self.get_actual_url_from_rra(tag_src)
             actual_url_obj = parse_url(actual_url)
-            _base_url_obj = parse_url(self.base_url)
+            base_url_obj = parse_url(self.base_url)
 
-            # Only scrape internal links, that is, links associated with the website being scraped only.
-            if download and (_base_url_obj.netloc and actual_url_obj.netloc) and _base_url_obj.netloc in actual_url_obj.netloc:
+            # Only scrape/download internal links, that is, links associated with the website being scraped only.
+            if download and (base_url_obj.netloc and actual_url_obj.netloc) and base_url_obj.netloc in actual_url_obj.netloc:
                 storage_path, _ , _ = self.download_url(url=actual_url, check_ext=False, unique_if_query_params=True)
 
                 # change the element's src to be compatible with the scraped website
                 if storage_path:
-                    element[src] = storage_path.replace('\\', '/')
-                    print(element.get(src)) #
-            elif not download:
-                return actual_url_obj.url
+                    tag[src] = storage_path.replace('\\', '/')
+                    print(tag.get(src)) #
+            return actual_url_obj.url
+
+        return None
 
 
-    def _get_soup_link(self, link: Tag, download: bool = True):
+    def get_soup_link_tag(self, link_tag: Tag, download: bool = False):
         '''
-        Get the link href and download the file
+        Get the link_tag href.
+        
+        Returns the full URL gotten from the tag's href and downloads the file or page it points to if download is True.
+
+        Returns None if it has no 'href'
         
         Args:
-            link (Tag): Link to be scraped.
-            download (bool, optional): Whether to download the file. Defaults to True.
+        * `link_tag` (Tag): bs4 'HTML <a></a>' Tag object.
+        * `download` (bool, optional): Whether to download the page or file the link points to. Defaults to False.
         '''
-        if not isinstance(link, Tag):
-            raise TypeError('`link` should be of type Tag')
-        if not link.name == 'a':
-            raise ValueError('`link` should be an HTML "a" tag')
+        if not isinstance(link_tag, Tag):
+            raise TypeError('`link_tag` should be of type Tag')
+        if link_tag.name != 'a':
+            raise ValueError('`link_tag` should be an HTML "a" tag')
 
-        link_href = link.get('href', None)
-        actual_url = None
-        storage_path = None
-        html_filename = None
-
+        link_href = link_tag.get('href', None)
         if link_href:
-            actual_url = self._get_actual_url_from_src(link_href)
+            actual_url = self.get_actual_url_from_rra(link_href)
             actual_url_obj = parse_url(actual_url)
-            _base_url_obj = parse_url(self.base_url)
+            base_url_obj = parse_url(self.base_url)
 
             # Only scrape internal links, that is, links associated with the website being scraped only.
-            if download and (_base_url_obj.netloc and actual_url_obj.netloc) and _base_url_obj.netloc in actual_url_obj.netloc:
+            if download and (base_url_obj.netloc and actual_url_obj.netloc) and base_url_obj.netloc in actual_url_obj.netloc:
                 storage_path, new_file, html_filename = self.download_url(url=actual_url, save_as=self.html_filename, check_ext=False, unique_if_query_params=True)
+                # change the link_tag's href to be compatible with the scraped website
+                if storage_path:
+                    link_tag['href'] = storage_path.replace('\\', '/')
                 if new_file:
                     new_soup = self.make_soup(new_file)
                     self._get_associated_files(new_soup)
-
-                # change the link's href to be compatible with the scraped website
-                if storage_path:
-                    link['href'] = storage_path.replace('\\', '/')
-            elif not download:
+                    return (new_soup, storage_path, html_filename)
+            else:
                 return actual_url_obj.url
 
-        return (actual_url, storage_path, html_filename)
+        return None
+
 

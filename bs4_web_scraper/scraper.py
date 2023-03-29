@@ -8,7 +8,8 @@ DESCRIPTION: ::
     websites you are scraping by making a donation.
 """
 import os
-from typing import (Dict, List, Iterable, Any, IO)
+import re
+from typing import (AnyStr, Dict, List, Iterable, Any, IO, Tuple)
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -185,22 +186,6 @@ class BS4WebScraper(BS4BaseScraper):
 
         return None
 
-
-    def make_soup_from_url(self, url: str, **kwargs: Any):
-        """
-        Similar to `make_soup` but a url can be provided instead of markup. 
-        The function will get the url's markup and make a BeautifulSoup with it.
-
-        Returns BeautifulSoup if response from url is OK else returns None.
-
-        Args::
-            url (str): url from which soup will be created
-        """
-        response = self._make_request(url)
-        if response:
-            return self.make_soup(response.content, **kwargs)
-        return None
-
     
     def download_urls(self, urls: Iterable[Dict[str, str]], save_to: str | None = None, 
                         check_ext: bool = True, fast_download: bool = False, unique_if_query_params: bool = False):
@@ -265,8 +250,7 @@ class BS4WebScraper(BS4BaseScraper):
             * result (Iterable[str]): An iterable containing strings to be saved.
             * path (str): path to directory where the file containing `result` will be saved in the base storage directory.
             * **kwargs (Dict | optional): optional parameters to be used when necessary
-
-                    :param `csv_head` (str): heading for csv file type
+                    * `csv_head` (str): heading for csv file type
         '''
         path = os.path.join(self.base_storage_dir, path)
         file_handler = FileHandler(path)  
@@ -276,11 +260,13 @@ class BS4WebScraper(BS4BaseScraper):
             detailed_url_list = [('S/N', csv_head)]
             detailed_url_list.extend([ (c + 1, url_lists[c][0]) for c in range(len(url_lists)) ])
             return file_handler.write_to_file(detailed_url_list)
-        return file_handler.write_to_file(result)
+        for r in result: 
+            file_handler.write_to_file(f'{r}\n') 
+        return None
 
 
     def get_all(self, url: str, target: str, attrs: Dict[str, str] | Iterable[Dict[str, str]] = {}, 
-                        count: int = None, recursive: bool = True, **kwargs):
+                        count: int = None, recursive: bool = True):
         """
         Parses out the link to all elements with the target name in specified url.
 
@@ -292,24 +278,22 @@ class BS4WebScraper(BS4BaseScraper):
             * attrs (Dict[str, str] | Iterable[Dict[str, str]]): A dictionary or list of dictionaries of filters on attribute values.
             * count (int): Number of links to be found before stopping.
             * recursive (bool): Performs a recursive search of url page's children
-            * **kwargs (Dict | optional): optional parameters to be used for 
-                    * creating BeautifulSoup and is going to be passed to the BeautifulSoup class on instantiation.
         """
         self.set_base_url(url)
-        response = self._make_request(url)
+        response = self.get(url)
         urls = []
         if response:
-            soup = self.make_soup(response.content, **kwargs)
-            elements = []
-            url_rel_attr = self._get_element_src_by_tag_name(target)
+            soup = self.make_soup(response.content)
+            tags = []
+            rra = self.get_tag_rra_by_tag_name(target)
             if isinstance(attrs, Iterable) and not isinstance(attrs, dict):
                 for attr in attrs:
-                    elements.extend(soup.find_all(target, attr, recursive=recursive, limit=count))
+                    tags.extend(soup.find_all(target, attr, recursive=recursive, limit=count))
             else:
-                elements.extend(soup.find_all(target, attrs, recursive=recursive, limit=count))
-            elements = filter(lambda el: bool(el.get(url_rel_attr)), elements)
+                tags.extend(soup.find_all(target, attrs, recursive=recursive, limit=count))
+            tags = filter(lambda tag: bool(tag.get(rra)), tags)
             with ThreadPoolExecutor() as executor:
-                results = executor.map(lambda arg: self._get_soup_tag(*arg), map(lambda el: (el, False), elements))
+                results = executor.map(lambda arg: self.get_soup_tag_rra(*arg), map(lambda tag: (tag, False), tags))
                 urls.extend(results)
         return urls
             
@@ -326,11 +310,11 @@ class BS4WebScraper(BS4BaseScraper):
             * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/links.txt".
             Available file formats are: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for 
-                    * creating BeautifulSoup and is going to be passed to the BeautifulSoup class on instantiation.
-                    * saving results and is passed to the `save_results` function if `save_to_file` is True.
+                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.get_all(url, target='a', **kwargs)
+        result = self.get_all(url, target='a')
         if result and save_to_file is True:
+            kwargs['csv_head'] = kwargs.get('csv_head', 'Links')
             self.save_results(result, file_path, **kwargs)
         return result
 
@@ -347,15 +331,15 @@ class BS4WebScraper(BS4BaseScraper):
             * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/styles.txt".
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for 
-                    * creating BeautifulSoup and is going to be passed to the BeautifulSoup class on instantiation.
-                    * saving results and is passed to the `save_results` function if `save_to_file` is True.
+                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
         attrs = (
             {'rel': 'stylesheet'},
             {'type': 'text/css'}
         )
-        result = self.get_all(url, target='link', attrs=attrs, **kwargs)
+        result = self.get_all(url, target='link', attrs=attrs)
         if result and save_to_file is True:
+            kwargs['csv_head'] = kwargs.get('csv_head', 'Stylesheets')
             self.save_results(result, file_path, **kwargs)
         return result
             
@@ -367,16 +351,16 @@ class BS4WebScraper(BS4BaseScraper):
         Returns a list of script links and saves the links to a file if `save_to_file` is set to True.
 
         Args:
-            * url (str): Url to get the scripts from.
-            * save_to_file (bool, optional): Whether to save the scripts to a file. Defaults to False.
-            * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/scripts.txt".
+            * `url` (str): Url to get the scripts from.
+            * `save_to_file` (bool, optional): Whether to save the scripts to a file. Defaults to False.
+            * `file_path` (str, optional): File to save the links to. Defaults to "self.base_storage_dir/scripts.txt".
             Available file formats include: csv, txt, doc, docx, pdf...
-            * **kwargs (Dict | optional): optional parameters to be used for 
-                    * creating BeautifulSoup and is going to be passed to the BeautifulSoup class on instantiation.
-                    * saving results and is passed to the `save_results` function if `save_to_file` is True.
+            * `**kwargs` (Dict | optional): optional parameters to be used for 
+                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.get_all(url, target='script', **kwargs)
+        result = self.get_all(url, target='script')
         if result and save_to_file is True:
+            kwargs['csv_head'] = kwargs.get('csv_head', 'Scripts')
             self.save_results(result, file_path, **kwargs)
         return result
 
@@ -393,15 +377,15 @@ class BS4WebScraper(BS4BaseScraper):
             * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/fonts.txt".
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for 
-                    * creating BeautifulSoup and is going to be passed to the BeautifulSoup class on instantiation.
-                    * saving results and is passed to the `save_results` function if `save_to_file` is True.
+                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
         attrs = (
             {'rel': 'preload'},
             {'as': 'font'}
         )
-        result = self.get_all(url, target='link', attrs=attrs, **kwargs)
+        result = self.get_all(url, target='link', attrs=attrs)
         if result and save_to_file is True:
+            kwargs['csv_head'] = kwargs.get('csv_head', 'Font Links')
             self.save_results(result, file_path, **kwargs)
         return result
 
@@ -418,11 +402,11 @@ class BS4WebScraper(BS4BaseScraper):
             * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/images.txt".
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for 
-                    * creating BeautifulSoup and is going to be passed to the BeautifulSoup class on instantiation.
-                    * saving results and is passed to the `save_results` function if `save_to_file` is True.
+                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.get_all(url, target='img', **kwargs)
+        result = self.get_all(url, target='img')
         if result and save_to_file is True:
+            kwargs['csv_head'] = kwargs.get('csv_head', 'Image Links')
             self.save_results(result, file_path, **kwargs)
         return result
 
@@ -434,16 +418,18 @@ class BS4WebScraper(BS4BaseScraper):
         Returns a list of video links and saves the links to a file if `save_to_file` is set to True.
 
         Args:
-            - url (str): Url to get the videos from.
-            - save_to_file (bool, optional): Whether to save the videos to a file. Defaults to False.
-            - file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/videos.txt".
+            * url (str): Url to get the videos from.
+            * save_to_file (bool, optional): Whether to save the videos to a file. Defaults to False.
+            * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/videos.txt".
             Available file formats include: csv, txt, doc, docx, pdf...
-            - **kwargs (Dict | optional): optional parameters to be used when and where necessary
-
-                    :param `csv_head` (str): heading for csv file type when saving results.
+            * **kwargs (Dict | optional): optional parameters to be used when and where necessary
+                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.get_all(url, target='video', **kwargs)
+        video_types = ('video/mp4', 'video/mpeg', 'video/ogg', 'video/webm', 'video/3gpp', 'video/quicktime')
+        v_list = [ {'type': v} for v in video_types ]
+        result = self.get_all(url, target='source', attrs=v_list)
         if result and save_to_file is True:
+            kwargs['csv_head'] = kwargs.get('csv_head', 'Video Links')
             self.save_results(result, file_path, **kwargs)
         return result
 
@@ -460,14 +446,83 @@ class BS4WebScraper(BS4BaseScraper):
             * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/audios.txt".
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for 
-                    * creating BeautifulSoup and is going to be passed to the BeautifulSoup class on instantiation.
-                    * saving results and is passed to the `save_results` function if `save_to_file` is True.ading for csv file type when saving results.
+                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         '''
-        result = self.get_all(url, target='audio', **kwargs)
+        audio_types = ('audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/wav', 'audio/aac', 'audio/flac', 'audio/m4a', 'audio/wma')
+        a_list = [ {'type': a} for a in audio_types ]
+        result = self.get_all(url, target='source', attrs=a_list)
         if result and save_to_file is True:
+            kwargs['csv_head'] = kwargs.get('csv_head', 'Audio Links')
             self.save_results(result, file_path, **kwargs)
         return result
         
+
+    def get_emails(self, url: str, save_to_file: bool = False, file_path: str = "emails.csv", **kwargs) -> List[str]:
+        """
+        Searches for and returns a list of emails found in the given url.
+
+        Args:
+            * url (str): Url to get the emails from.
+            * save_to_file (bool, optional): Whether to save the emails to a file. Defaults to False.
+            * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/emails.txt".
+            Available file formats include: csv, txt, doc, docx, pdf...
+            * **kwargs (Dict | optional): optional parameters to be used for
+                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
+                    * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
+        """
+        email_re = r'[-|\w]+@\w+.\w{2,}'
+        kwargs['re_flags'] = kwargs.get('re_flags', re.IGNORECASE)
+        kwargs['csv_head'] = kwargs.get('csv_head', 'Emails')
+        return self.get_pattern(url, email_re, save_to_file, file_path, **kwargs)
+
+
+    def get_phone_numbers(self, url: str, save_to_file: bool = False, file_path: str = "phones.csv", **kwargs) -> List[Tuple[str, str]]:
+        """
+        Searches for and returns a list of phone numbers which conform to the E.164 standard found in the given url. 
+        The phone numbers are returned as a tuple of the country code and the phone number.
+
+        Args:
+            * `url` (str): Url to get the phone numbers from.
+            * `save_to_file` (bool, optional): Whether to save the phone numbers to a file. Defaults to False.
+            * `file_path` (str, optional): File to save the links to. Defaults to "self.base_storage_dir/phones.txt".
+            Available file formats include: csv, txt, doc, docx, pdf...
+            * `**kwargs` (Dict | optional): optional parameters to be used for
+                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
+                    * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
+        """
+        pn_re = r'(\+\d{1,3})?[\s-]?(\d{7,16})'
+        kwargs['csv_head'] = kwargs.get('csv_head', 'Phone Numbers')
+        return self.get_pattern(url, pn_re, save_to_file, file_path, **kwargs)
+
+
+    def get_pattern(self, url: str, regex: str | AnyStr, save_to_file: bool = False, file_path: str = "re.csv", **kwargs) -> List[str]:
+        """
+        Takes a regex pattern and returns a list of matches found in the given url.
+
+        Args:
+            * url (str): Url to get the matches from.
+            * regex (str | AnyStr): Regex pattern to search for.
+            * save_to_file (bool, optional): Whether to save the matches to a file. Defaults to False.
+            * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/re.txt".
+            Available file formats include: csv, txt, doc, docx, pdf...
+            * **kwargs (Dict | optional): optional parameters to be used for
+                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
+                    * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
+        """
+        pattern = re.compile(regex, flags=kwargs.get('re_flags', re.MULTILINE))
+        text = self.make_soup_from_url(url).text
+        result = list({ match for match in pattern.findall(text) })
+        if result and save_to_file is True:
+            result_ = []
+            for r in result:
+                if isinstance(r, (list, tuple)):
+                    r = ''.join(r)
+                result_.append(r)
+            kwargs['csv_head'] = kwargs.get('csv_head', 'Matches')
+            self.save_results(result_, file_path, **kwargs)
+        return result
+
+
 
 if __name__ == "__main__":
     print(BS4WebScraper.__doc__)
