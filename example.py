@@ -1,5 +1,5 @@
-from scripts.scraper import BS4WebScraper
-from scripts.help import bs4_credentials_template, available_translation_engines
+from . bs4_web_scraper import BS4WebScraper
+from . bs4_web_scraper import credentials_template, translation_engines
 
 
 # create a scraper object
@@ -13,9 +13,9 @@ bs4_scraper.scrape(url='http://www.google.com/', scrape_depth=0, translate_to='f
 
 # prints the credentials format for the scraper
 print('Credentials format: ')
-print(bs4_credentials_template, '\n')
+print(credentials_template, '\n')
 
 # prints the available translation engines
 print('Available translation engines: ')
-print(available_translation_engines)
+print(translation_engines)
 
