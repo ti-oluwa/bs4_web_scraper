@@ -1,4 +1,4 @@
-### bs4_web_scraper
+## bs4_web_scraper
 
 ### __A web scraper based on the BeautifulSoup4 library with translation capabilities.__
 

@@ -266,7 +266,7 @@ class Translator:
         '''
         Translates file from `src_lang` to `target_lang` using `self.translator`.
 
-        Returns translated file.
+        Returns translated file's FileHandler.
 
         Supported file types include: .txt, .csv, .doc, .docx, .pdf, .md..., mostly files with text content.
 
@@ -304,7 +304,7 @@ class Translator:
             translated_text = "".join(translated_contents)
             file_handler.write_to_file(translated_text, write_mode='w+')
             file_handler._open_file(mode='r+')
-            return file_handler.file
+            return file_handler
         except Exception as e:
             raise TranslationError(f"File cannot be translated. {e}")
 
@@ -383,6 +383,7 @@ class Translator:
                 for item_list in utils.slice_iterable(translatable_elements, 50):
                     _ = executor.map(lambda item: self.translate_soup_tag(item, target_lang, **kwargs), item_list)
                     time.sleep(random.randint(3, 5))
+                executor.shutdown(wait=True, cancel_futures=False)
         else:
             for element in translatable_elements:
                 self.translate_soup_tag(element)
