@@ -22,7 +22,7 @@ from . import translate
 from .logging import Logger
 from .exceptions import (InvalidURLError, UnsupportedLanguageError, FileError, InvalidScrapableTagError)
 from .request_limiter import RequestLimitSetting
-from .html_file_handler import FileHandler
+from .file_handler import FileHandler
 
 
 # SCRAPE SITES WITH PAGINATION
