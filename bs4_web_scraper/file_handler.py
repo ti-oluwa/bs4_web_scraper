@@ -1,5 +1,4 @@
 import os
-from requests import delete
 import yaml
 import toml
 import json
@@ -66,6 +65,9 @@ class FileHandler:
         self.open_file('a+')
 
 
+    def __str__(self) -> str:
+        return self.read_file()
+
     @property
     def filetype(self) -> str:
         filetype = os.path.splitext(self.filepath)[-1].removeprefix('.').lower()
@@ -120,14 +122,16 @@ class FileHandler:
         return None
 
 
-    def clear_file(self) -> None:
+    def clear_file(self):
         """
         Deletes file content.
+
+        Returns the file open in the mode it was being used in before clearing was done.
         """
         im_ = self.file.mode
         self.open_file('w')
         self.file.write('')
-        # Open the file using mode before the the file was cleared to ensure that the file is 
+        # Opens the file using mode before the the file was cleared to ensure that the file is 
         # still available for use in the initial user preferred mode
         return self.open_file(im_)
 
@@ -184,7 +188,7 @@ class FileHandler:
         Reads the file and returns the content using the specified `read_mode`.
 
         Args:
-            read_mode(str): The mode to be used to read the file. If None, it writes in read(r) mode.
+            read_mode(str): The mode to be used to read the file. If None, it reads in 'read(r)' mode.
         '''
         if read_mode and read_mode in ['w', 'wb', 'a', 'ab']:
             raise FileError(f"`{read_mode}` mode does not allow reading from file")

@@ -9,7 +9,8 @@ DESCRIPTION: ::
 """
 import os
 import re
-from typing import (AnyStr, Dict, List, Iterable, Any, IO, Tuple)
+from typing import (AnyStr, Dict, List, Any, IO, Tuple)
+from collections.abc import Iterable
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -180,9 +181,9 @@ class BS4WebScraper(BS4BaseScraper):
             self.log("SCRAPED BASE LEVEL SUCCESSFULLY! \n")
 
         if time_taken >= 60:
-            self.log(f"SCRAPING COMPLETED IN {(time_taken / 60):.2f} MINUTES\n")
+            self.log(f"SCRAPING COMPLETED IN {(time_taken / 60):.2f} MINUTE{'S'[:round(time_taken / 60)^1]}\n")
         else:
-            self.log(f"SCRAPING COMPLETED IN {time_taken:.2f} SECONDS\n")
+            self.log(f"SCRAPING COMPLETED IN {time_taken:.2f} SECOND{'S'[:round(time_taken)^1]}\n")
 
         return None
 
@@ -226,14 +227,12 @@ class BS4WebScraper(BS4BaseScraper):
             with ThreadPoolExecutor() as executor:
                 values = executor.map(lambda kwargs: self.download_url(**kwargs), urls_download_params)
             results.extend(values)
-            return results
 
         elif fast_download and len(urls) > 200:
             self.logger.log_warning("CANNOT USE FAST DOWNLOAD! TOO MANY URLS. FALLING BACK TO NORMAL DOWNLOAD.\n")
-
-        self.log("DOWNLOADS STARTED...")
-        values = map(lambda kwargs: self.download_url(**kwargs), urls_download_params)
-        results.extend(values)
+            self.log("DOWNLOADS STARTED...")
+            values = map(lambda kwargs: self.download_url(**kwargs), urls_download_params)
+            results.extend(values)
 
         if results:
             self.log("DOWNLOADS FINISHED!\n")
@@ -285,7 +284,7 @@ class BS4WebScraper(BS4BaseScraper):
         if response:
             soup = self.make_soup(response.content)
             tags = []
-            rra = self.get_tag_rra_by_tag_name(target)
+            rra = self.get_rra_by_tag_name(target)
             if isinstance(attrs, Iterable) and not isinstance(attrs, dict):
                 for attr in attrs:
                     tags.extend(soup.find_all(target, attr, recursive=recursive, limit=count))
@@ -293,7 +292,7 @@ class BS4WebScraper(BS4BaseScraper):
                 tags.extend(soup.find_all(target, attrs, recursive=recursive, limit=count))
             tags = filter(lambda tag: bool(tag.get(rra)), tags)
             with ThreadPoolExecutor() as executor:
-                results = executor.map(lambda arg: self.get_soup_tag_rra(*arg), map(lambda tag: (tag, False), tags))
+                results = executor.map(lambda arg: self.get_tag_rra(*arg), map(lambda tag: (tag, False), tags))
                 urls.extend(results)
         return urls
             
@@ -503,7 +502,7 @@ class BS4WebScraper(BS4BaseScraper):
             * url (str): Url to get the matches from.
             * regex (str | AnyStr): Regex pattern to search for.
             * save_to_file (bool, optional): Whether to save the matches to a file. Defaults to False.
-            * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/re.txt".
+            * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/re.csv".
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for
                     * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
