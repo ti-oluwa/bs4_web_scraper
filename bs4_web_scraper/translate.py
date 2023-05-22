@@ -31,10 +31,10 @@ class Translator:
     #### Translator class for translating text and html content using the `translators` package.
 
     #### Parameters:
-    @param `translation_engine` (str): The translation engine to be used. Defaults to "google".
+    @param `translation_engine` (str): The translation engine to be used. Defaults to "bing".
 
     #### Attributes: ::
-    @attr `translation_engine` (str): The translation engine to be used. Defaults to "google".
+    @attr `translation_engine` (str): The translation engine to be used. Defaults to "bing".
     @attr `target_language` (str): The target language to translate to. Defaults to None.
     @attr `source_language` (str): The source language to translate from. Defaults to None.
     @attr `_cache` (Dict[str, str]): A cache for storing translations to manage translation cost. Defaults to an empty dict.
@@ -68,7 +68,7 @@ class Translator:
     
     """
     logger: Logger = None
-    translation_engine: str = 'google'
+    translation_engine: str = 'bing'
     _server: TranslatorsServer = tss
     target_language: str = None
     source_language: str = None
@@ -81,14 +81,14 @@ class Translator:
         'small', 'b', 'q', 'option', 'code', 'h2', 'a', 'strong', 'span',
     ]
 
-    def __init__(self, translation_engine: str = "google", ) -> None:
+    def __init__(self, translation_engine: str = "bing", ) -> None:
         self.translation_engine = translation_engine
 
 
     @property
     def supported_languages(self) -> dict:
         if self.translation_engine:
-            args = ('yes','en', 'zh')
+            args = ('yes','en', 'am')
             func = lambda f: getattr(self._server, f"{self.translation_engine}")(*f)
             func(args)
             return getattr(self._server, f"_{self.translation_engine}").language_map
@@ -107,7 +107,60 @@ class Translator:
             self.logger.log(message, level)
         elif self.logger and not isinstance(self.logger, Logger):
             raise TypeError('Invalid type for `self.logger`. `self.logger` should be an instance of bs4_web_scraper.logging.Logger')
-        return print(message + '\n')  
+        return print(message + '\n') 
+    
+
+    def lang_is_supported(self, lang_code: str) -> bool:
+        '''
+        Check if the specified language code is supported by `self.translator`
+        
+        Returns True if supported, else False.
+
+        Args:
+            lang_code (str): The language code to check.
+        
+        '''
+        lang_code = lang_code.strip().lower()
+        if not lang_code:
+            raise TranslationError("`lang_code` cannot be empty")
+        return bool(self.supported_languages.get(lang_code, None)) if self.supported_languages else False
+
+
+    def set_target_and_src_lang(self, target_lang: str, src_lang: str = 'auto') -> None:
+        """
+        Sets both `self.target_language` and `self.source_language`
+        """
+        self.set_translator_target(target_lang)
+        self.set_translator_source(src_lang)
+        return None
+
+
+    def set_translator_target(self, target_lang: str) -> None:
+        '''
+        Sets the instance's target language for translation.
+
+        Args:
+            target_lang (str): The target language for translation.
+        
+        '''
+        if target_lang and not self.lang_is_supported(target_lang):
+            raise UnsupportedLanguageError("Unsupported target language for translation", target_lang, self.translation_engine)
+
+        self.target_language = target_lang.strip().lower()
+
+
+    def set_translator_source(self, src_lang: str) -> None:
+        '''
+        Sets the instance's source language for translation.
+
+        Args:
+            src_lang (str): The source language for translation.
+        
+        '''
+        if src_lang and src_lang != 'auto' and not self.lang_is_supported(src_lang):
+            raise UnsupportedLanguageError("Unsupported source language for translation", src_lang, self.translation_engine)
+
+        self.source_language = src_lang.strip().lower()
 
 
     def add_translatable_element(self, element: str) -> None:
@@ -266,7 +319,7 @@ class Translator:
         '''
         Translates file from `src_lang` to `target_lang` using `self.translator`.
 
-        Returns translated file's FileHandler.
+        Returns translated file's FileHandler`.
 
         Supported file types include: .txt, .csv, .doc, .docx, .pdf, .md..., mostly files with text content.
 
@@ -388,57 +441,3 @@ class Translator:
             for element in translatable_elements:
                 self.translate_soup_tag(element)
         return soup
-
-
-    def lang_is_supported(self, lang_code: str) -> bool:
-        '''
-        Check if the specified language code is supported by `self.translator`
-        
-        Returns True if supported, else False.
-
-        Args:
-            lang_code (str): The language code to check.
-        
-        '''
-        lang_code = lang_code.strip().lower()
-        if not lang_code:
-            raise TranslationError("`lang_code` cannot be empty")
-        return bool(self.supported_languages.get(lang_code, None)) if self.supported_languages else False
-
-
-    def set_target_and_src_lang(self, target_lang: str, src_lang: str = 'auto') -> None:
-        """
-        Sets both `self.target_language` and `self.source_language`
-        """
-        self.set_translator_target(target_lang)
-        self.set_translator_source(src_lang)
-        return None
-
-
-    def set_translator_target(self, target_lang: str) -> None:
-        '''
-        Sets the instance's target language for translation.
-
-        Args:
-            target_lang (str): The target language for translation.
-        
-        '''
-        if target_lang and not self.lang_is_supported(target_lang):
-            raise UnsupportedLanguageError("Unsupported target language for translation", target_lang, self.translation_engine)
-
-        self.target_language = target_lang.strip().lower()
-
-
-    def set_translator_source(self, src_lang: str) -> None:
-        '''
-        Sets the instance's source language for translation.
-
-        Args:
-            src_lang (str): The source language for translation.
-        
-        '''
-        if src_lang and not self.lang_is_supported(src_lang):
-            raise UnsupportedLanguageError("Unsupported source language for translation", src_lang, self.translation_engine)
-
-        self.source_language = src_lang.strip().lower()
-        
