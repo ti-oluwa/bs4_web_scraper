@@ -557,16 +557,16 @@ class BS4BaseScraper:
             raise TypeError("Invalid type for `markup`")
         is_bytes = isinstance(markup, bytes)
 
-        self.log('TRANSLATING markup...\n')
+        self.log('TRANSLATING MARKUP...\n')
         soup = self.make_soup(markup)
         markup = self.translator.translate_soup(soup, self.translate_to).prettify(formatter="html5")
         # NOT FUNCTIONAL FOR NOW
         # markup = self.translator.translate_html(markup, target_lang=self.translator.target_language)
-        self.log("markup TRANSLATED!\n")
+        self.log("MARKUP TRANSLATED!\n")
 
         # re-encode the markup if the initial markup was in bytes
         if is_bytes:
-            self.log('RE-ENCODING markup...\n')
+            self.log('RE-ENCODING MARKUP...\n')
             markup = markup.encode('utf-8')
         return markup
     
