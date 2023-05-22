@@ -267,52 +267,52 @@ class Translator:
 
 
     # NOT FUNCTIONAL FOR NOW
-    def translate_html(self, html: str | bytes, src_lang: str="auto", target_lang: str="en", **kwargs):
-        '''
-        Translates the html content from `src_lang` to `target_lang` using `self.translator`.
+    # def translate_html(self, html: str | bytes, src_lang: str="auto", target_lang: str="en", **kwargs):
+    #     '''
+    #     Translates the html content from `src_lang` to `target_lang` using `self.translator`.
 
-        ### NOT FUNCTIONAL FOR NOW. CONVERT HTML TO BEAUTIFULSOUP OBJECT AND USE THE `translate_soup` METHOD INSTEAD.
+    #     ### NOT FUNCTIONAL FOR NOW. CONVERT HTML TO BEAUTIFULSOUP OBJECT AND USE THE `translate_soup` METHOD INSTEAD.
 
-        Returns translated html.
+    #     Returns translated html.
 
-        Args:
-            html (str | bytes): HTML content to be translated
-            src_lang (str, optional): Source language. Defaults to "auto".
-            target_lang (str, optional): Target language. Defaults to "en".
-            **kwargs: Keyword arguments to be passed to `translators.translate_html`.
-                    :param is_detail_result: boolean, default False.
-                    :param professional_field: str, support baidu(), caiyun(), alibaba() only.
-                    :param timeout: float, default None.
-                    :param proxies: dict, default None.
-                    :param sleep_seconds: float, default random.random().
-                    :param update_session_after_seconds: float, default 1500.
-                    :param if_use_cn_host: bool, default False.
-                    :param reset_host_url: str, default None.
-                    :param if_ignore_empty_query: boolean, default False.
-                    :param if_ignore_limit_of_length: boolean, default False.
-                    :param limit_of_length: int, default 5000.
-                    :param if_show_time_stat: boolean, default False.
-                    :param show_time_stat_precision: int, default 4.
-                    :param lingvanex_model: str, default 'B2C'.
-        '''
-        if not isinstance(html, (str, bytes)):
-            raise TypeError("Invalid type for `html`")
-        self.set_target_and_src_lang(target_lang, src_lang)
-        kwargs_ = {
-            'if_ignore_empty_query': True,
-        }
-        kwargs_.update(kwargs)
-        html = html.decode('utf-8') if isinstance(html, bytes) else html
-        try:
-            translated_html = ts.translate_html(
-                                            html_text=html, to_language=target_lang, from_language=src_lang, 
-                                            translator=self.translation_engine, **kwargs_
-                                            )
-            return translated_html
-        except Exception as e:
-            error_ = TranslationError(f"Error translating html: {e}") 
-            self._log(f"{error_}", level='error')
-            return html
+    #     Args:
+    #         html (str | bytes): HTML content to be translated
+    #         src_lang (str, optional): Source language. Defaults to "auto".
+    #         target_lang (str, optional): Target language. Defaults to "en".
+    #         **kwargs: Keyword arguments to be passed to `translators.translate_html`.
+    #                 :param is_detail_result: boolean, default False.
+    #                 :param professional_field: str, support baidu(), caiyun(), alibaba() only.
+    #                 :param timeout: float, default None.
+    #                 :param proxies: dict, default None.
+    #                 :param sleep_seconds: float, default random.random().
+    #                 :param update_session_after_seconds: float, default 1500.
+    #                 :param if_use_cn_host: bool, default False.
+    #                 :param reset_host_url: str, default None.
+    #                 :param if_ignore_empty_query: boolean, default False.
+    #                 :param if_ignore_limit_of_length: boolean, default False.
+    #                 :param limit_of_length: int, default 5000.
+    #                 :param if_show_time_stat: boolean, default False.
+    #                 :param show_time_stat_precision: int, default 4.
+    #                 :param lingvanex_model: str, default 'B2C'.
+    #     '''
+    #     if not isinstance(html, (str, bytes)):
+    #         raise TypeError("Invalid type for `html`")
+    #     self.set_target_and_src_lang(target_lang, src_lang)
+    #     kwargs_ = {
+    #         'if_ignore_empty_query': True,
+    #     }
+    #     kwargs_.update(kwargs)
+    #     html = html.decode('utf-8') if isinstance(html, bytes) else html
+    #     try:
+    #         translated_html = ts.translate_html(
+    #                                         html_text=html, to_language=target_lang, from_language=src_lang, 
+    #                                         translator=self.translation_engine, **kwargs_
+    #                                         )
+    #         return translated_html
+    #     except Exception as e:
+    #         error_ = TranslationError(f"Error translating html: {e}") 
+    #         self._log(f"{error_}", level='error')
+    #         return html
 
 
     def translate_file(self, filepath: str, src_lang: str="auto", target_lang: str="en", **kwargs):

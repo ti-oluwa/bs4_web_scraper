@@ -169,7 +169,11 @@ class BS4BaseScraper:
         self.max_no_of_retries = max_no_of_retries
         self.base_storage_dir = os.path.abspath(base_storage_dir)
         self.storage_path = storage_path
-        self.request_limit_setting = RequestLimitSetting(no_of_requests_before_pause, scrape_session_pause_duration, self.max_no_of_retries, self.logger)
+        self.request_limit_setting = RequestLimitSetting(
+                                                        no_of_requests_before_pause, 
+                                                        scrape_session_pause_duration, 
+                                                        self.max_no_of_retries, self.logger
+                                                        )
 
 
     @property
