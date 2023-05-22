@@ -309,7 +309,7 @@ class BS4WebScraper(BS4BaseScraper):
                 links = [ link_obj[0] for link_obj in link_objs if (base_url_obj.netloc and link_obj[1].netloc) and (base_url_obj.netloc in link_obj[1].netloc) ] 
 
                 with ThreadPoolExecutor() as executor:
-                    results = executor.map(lambda args: self.get_all(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
+                    results = executor.map(lambda args: self.find_all(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
                     for result in results:
                         if result:
                             urls.extend(result)
@@ -377,7 +377,7 @@ class BS4WebScraper(BS4BaseScraper):
             * **kwargs (Dict | optional): optional parameters to be used for 
                     * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.get_all(url, target='a', depth=depth)
+        result = self.find_all(url, target='a', depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Links')
             self.save_results(result, file_path, **kwargs)
@@ -404,7 +404,7 @@ class BS4WebScraper(BS4BaseScraper):
             {'rel': 'stylesheet'},
             {'type': 'text/css'}
         )
-        result = self.get_all(url, target='link', attrs=attrs, depth=depth)
+        result = self.find_all(url, target='link', attrs=attrs, depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Stylesheets')
             self.save_results(result, file_path, **kwargs)
@@ -427,7 +427,7 @@ class BS4WebScraper(BS4BaseScraper):
             * `**kwargs` (Dict | optional): optional parameters to be used for 
                     * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.get_all(url, target='script', depth=depth)
+        result = self.find_all(url, target='script', depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Scripts')
             self.save_results(result, file_path, **kwargs)
@@ -454,7 +454,7 @@ class BS4WebScraper(BS4BaseScraper):
             {'rel': 'preload'},
             {'as': 'font'}
         )
-        result = self.get_all(url, target='link', attrs=attrs, depth=depth)
+        result = self.find_all(url, target='link', attrs=attrs, depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Font Links')
             self.save_results(result, file_path, **kwargs)
@@ -477,7 +477,7 @@ class BS4WebScraper(BS4BaseScraper):
             * **kwargs (Dict | optional): optional parameters to be used for 
                     * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.get_all(url, target='img', depth=depth)
+        result = self.find_all(url, target='img', depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Image Links')
             self.save_results(result, file_path, **kwargs)
@@ -502,7 +502,7 @@ class BS4WebScraper(BS4BaseScraper):
         """
         video_types = ('video/mp4', 'video/mpeg', 'video/ogg', 'video/webm', 'video/3gpp', 'video/quicktime')
         v_list = [ {'type': v} for v in video_types ]
-        result = self.get_all(url, target='source', attrs=v_list, depth=depth)
+        result = self.find_all(url, target='source', attrs=v_list, depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Video Links')
             self.save_results(result, file_path, **kwargs)
@@ -527,7 +527,7 @@ class BS4WebScraper(BS4BaseScraper):
         '''
         audio_types = ('audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/wav', 'audio/aac', 'audio/flac', 'audio/m4a', 'audio/wma')
         a_list = [ {'type': a} for a in audio_types ]
-        result = self.get_all(url, target='source', attrs=a_list, depth=depth)
+        result = self.find_all(url, target='source', attrs=a_list, depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Audio Links')
             self.save_results(result, file_path, **kwargs)
