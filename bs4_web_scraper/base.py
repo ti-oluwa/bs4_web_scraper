@@ -6,7 +6,6 @@ DESCRIPTION: ::
 from typing import IO, Any, Dict, List
 import requests
 import os
-import io
 import random
 import time
 import json
@@ -816,7 +815,7 @@ class BS4BaseScraper:
         '''
         Gets the bs4.element.Tag object 'resource-related-attribute' if it has any.
         
-        Returns the full resource URL if `download` is False and downloads the resource it points to if `download` is set to True.
+        Returns the full resource URL if `download` is False or downloads the resource it points to if `download` is set to True.
 
         Returns None if it has no 'resource-related-attribute'
 

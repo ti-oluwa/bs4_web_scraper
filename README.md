@@ -28,7 +28,7 @@
 * Web scraping
 * Translation
 * Saving scraped data to a file
-* Downloading data to a file
+* Downloading data from a web page or URL
 * Logging the scraping process
 
 
@@ -185,17 +185,18 @@ The following are some useful methods for scraping web data using the scraper cl
 
 - `download_url`
 - `download_urls`
-- `get_all`
-- `get_links`
-- `get_styles`
-- `get_scripts`
-- `get_videos`
-- `get_images`
-- `get_audios`
-- `get_fonts`
-- `get_pattern`
-- `get_emails`
-- `get_phones`
+- `find_all`
+- `find_all_tags`
+- `find_links`
+- `find_stylesheets`
+- `find_scripts`
+- `find_videos`
+- `find_images`
+- `find_audios`
+- `find_fonts`
+- `find_pattern`
+- `find_emails`
+- `find_phone_numbers`
 
 For information on how to use these methods, do:
 
