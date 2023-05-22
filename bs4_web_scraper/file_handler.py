@@ -82,6 +82,11 @@ class FileHandler:
     def filename(self) -> str:
         filename = self.filepath.replace(os.path.dirname(self.filepath), '')
         return filename.replace('\\', '')
+    
+    
+    @property
+    def file_content(self):
+        return self.read_file('r')
 
 
     @staticmethod

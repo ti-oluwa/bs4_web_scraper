@@ -169,7 +169,11 @@ class BS4BaseScraper:
         self.max_no_of_retries = max_no_of_retries
         self.base_storage_dir = os.path.abspath(base_storage_dir)
         self.storage_path = storage_path
-        self.request_limit_setting = RequestLimitSetting(no_of_requests_before_pause, scrape_session_pause_duration, self.max_no_of_retries, self.logger)
+        self.request_limit_setting = RequestLimitSetting(
+                                                        no_of_requests_before_pause, 
+                                                        scrape_session_pause_duration, 
+                                                        self.max_no_of_retries, self.logger
+                                                        )
 
 
     @property
@@ -542,33 +546,6 @@ class BS4BaseScraper:
                         self.request_limit_setting.reset_max_retry()
                 return None    
         return False
-
-    
-    def translate_markup(self, markup: str | bytes) -> str | bytes:
-        '''
-        Translates the HTML markup given using the translator set for the scraper.
-
-        Returns the translated markup.
-
-        Args::
-        * `markup` (str | bytes): The markup to translate.
-        '''
-        if not isinstance(markup, (str, bytes)):
-            raise TypeError("Invalid type for `markup`")
-        is_bytes = isinstance(markup, bytes)
-
-        self.log('TRANSLATING MARKUP...\n')
-        soup = self.make_soup(markup)
-        markup = self.translator.translate_soup(soup, self.translate_to).prettify(formatter="html5")
-        # NOT FUNCTIONAL FOR NOW
-        # markup = self.translator.translate_html(markup, target_lang=self.translator.target_language)
-        self.log("MARKUP TRANSLATED!\n")
-
-        # re-encode the markup if the initial markup was in bytes
-        if is_bytes:
-            self.log('RE-ENCODING MARKUP...\n')
-            markup = markup.encode('utf-8')
-        return markup
     
 
     def save_to_file(self, filename: str, storage_path: str, content: str | bytes, 
@@ -598,7 +575,7 @@ class BS4BaseScraper:
 
         # Translate content if necessary
         if translate and (self.translate_to and filename.endswith('.html')):
-            content = self.translate_markup(content)
+            content = self.translator.translate_markup(content, target_lang=self.translate_to)
 
         try:
             if os.path.isabs(storage_path):
