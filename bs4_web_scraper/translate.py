@@ -266,6 +266,45 @@ class Translator:
             return text
 
 
+    def translate_markup(self, markup: str | bytes, src_lang: str="auto", target_lang: str="en", **kwargs) -> str | bytes:
+        '''
+        Translates the HTML/XML markup.
+
+        Returns the translated markup.
+
+        Args:
+            markup (str | bytes): HTML/XML content to be translated
+            src_lang (str, optional): Source language. Defaults to "auto".
+            target_lang (str, optional): Target language. Defaults to "en".
+            **kwargs: Keyword arguments to be passed to `translators.translate_html`.
+                    :param is_detail_result: boolean, default False.
+                    :param professional_field: str, support baidu(), caiyun(), alibaba() only.
+                    :param timeout: float, default None.
+                    :param proxies: dict, default None.
+                    :param sleep_seconds: float, default random.random().
+                    :param update_session_after_seconds: float, default 1500.
+                    :param if_use_cn_host: bool, default False.
+                    :param reset_host_url: str, default None.
+                    :param if_ignore_empty_query: boolean, default False.
+                    :param if_ignore_limit_of_length: boolean, default False.
+                    :param limit_of_length: int, default 5000.
+                    :param if_show_time_stat: boolean, default False.
+                    :param show_time_stat_precision: int, default 4.
+                    :param lingvanex_model: str, default 'B2C'.
+        '''
+        if not isinstance(markup, (str, bytes)):
+            raise TypeError("Invalid type for `markup`")
+        is_bytes = isinstance(markup, bytes)
+
+        soup = BeautifulSoup(markup, 'lxml')
+        translated_markup = self.translate_soup(soup, src_lang, target_lang, **kwargs).prettify(formatter="html5")
+
+        # re-encode the markup if the initial markup was in bytes
+        if is_bytes:
+            translated_markup = translated_markup.encode('utf-8')
+        return translated_markup
+
+
     # NOT FUNCTIONAL FOR NOW
     # def translate_html(self, html: str | bytes, src_lang: str="auto", target_lang: str="en", **kwargs):
     #     '''
@@ -362,7 +401,7 @@ class Translator:
             raise TranslationError(f"File cannot be translated. {e}")
 
 
-    def translate_soup_tag(self, element: Tag, target_lang: str = "en", _ct: int = 0, **kwargs) -> None:
+    def translate_soup_tag(self, element: Tag, src_lang: str = "auto", target_lang: str = "en", _ct: int = 0, **kwargs) -> None:
         '''
         Translates the text of a BeautifulSoup element.
 
@@ -374,6 +413,8 @@ class Translator:
 
         Args:
             `element` (bs4.element.Tag): The element whose text is to be translated.
+            `src_lang` (str, optional): Source language. Defaults to "auto".
+            `target_lang` (str, optional): Target language. Defaults to "en".
             `_ct` (int, optional): The number of times the function has been called recursively. Defaults to 0.
             Do not pass this argument manually.
 
@@ -393,7 +434,7 @@ class Translator:
                 element.string.replace_with(cached_translation)
             else:
                 try:
-                    translation = self.translate_text(text=element.string, target_lang=target_lang, **kwargs)
+                    translation = self.translate_text(text=element.string, src_lang=src_lang, target_lang=target_lang, **kwargs)
                     element.string.replace_with(translation)
                 except Exception as e:
                     error_ = TranslationError(f"Error translating element: {e}")
@@ -407,7 +448,7 @@ class Translator:
         return None
 
 
-    def translate_soup(self, soup: BeautifulSoup, target_lang: str = "en", thread: bool = True, **kwargs) -> BeautifulSoup:
+    def translate_soup(self, soup: BeautifulSoup, src_lang: str = "auto", target_lang: str = "en", thread: bool = True, **kwargs) -> BeautifulSoup:
         '''
         Translates the text of a BeautifulSoup object.
 
@@ -416,6 +457,7 @@ class Translator:
 
         Args:
             soup (BeautifulSoup): The BeautifulSoup object whose text is to be translated.
+            src_lang (str, optional): Source language. Defaults to "auto".
             target_lang (str, optional): The target language for translation. Defaults to "en".
             thread (bool, optional): Whether to use multi-threading to translate the text. Defaults to True.
             **kwargs: Keyword arguments to be passed to `translators.translate_soup_tag`.
@@ -428,15 +470,14 @@ class Translator:
         '''
         if not isinstance(soup, BeautifulSoup):
             raise TypeError("Invalid type for `soup`")
-        self.set_target_and_src_lang(target_lang)
+        self.set_target_and_src_lang(target_lang, src_lang)
         elements_ = soup.find_all(self._translatable_elements)
         translatable_elements = list(filter(lambda el: bool(el.string), elements_))
         if thread:
             with ThreadPoolExecutor() as executor:
                 for item_list in utils.slice_iterable(translatable_elements, 50):
-                    _ = executor.map(lambda item: self.translate_soup_tag(item, target_lang, **kwargs), item_list)
+                    _ = executor.map(lambda item: self.translate_soup_tag(item, src_lang, target_lang, **kwargs), item_list)
                     time.sleep(random.randint(3, 5))
-                executor.shutdown(wait=True, cancel_futures=False)
         else:
             for element in translatable_elements:
                 self.translate_soup_tag(element)
