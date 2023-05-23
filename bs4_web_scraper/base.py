@@ -46,12 +46,12 @@ class BS4BaseScraper:
     NOTE: On instantiation of the class, a new request session is created. This session is used to make all related requests.
 
     #### Parameters:
-    @param str `parser`: HTML or HTML/XML parser for BeautifulSoup. Default is "lxml", "html.parser" is another suitable parser.
+    @param str `parser`: Parser for BeautifulSoup. Default is "lxml", "html.parser" is another suitable parser.
 
     Available parsers::
     For more on parsers read the BeautifulSoup documentation [here](https://www.crummy.com/software/BeautifulSoup/bs4/doc/#installing-a-parser)
 
-    @param str `html_filename`: Default name used to save '*.html' files.
+    @param str `markup_filename`: Default name used to save markup files.
 
     @param int `no_of_requests_before_pause`: Defines the number of requests that can be made before a pause is taken.
     This should not exceed 50 to avoid high frequency requests. The upper limit is 100.
@@ -69,7 +69,7 @@ class BS4BaseScraper:
     @param str `base_storage_dir`: The directory where the folder containing scraped website will be stored. Defaults to 
     the current directory.
 
-    @param str `storage_path`: Path where the base(index) HTML file will be saved with respect to the `base_storage_dir`.
+    @param str `storage_path`: Path where the base(index) Markup file will be saved with respect to the `base_storage_dir`.
     Defaults to directly inside the `base_storage_dir`.
 
     @param str `log_filepath`: Name or path (relative or absolute) of the file logs will be written into. Defaults to '<self.__class__.__name__.lower()>.log'.
@@ -93,12 +93,12 @@ class BS4BaseScraper:
 
     @attr int `level_reached`: The depth or number of levels successfully scraped.
 
-    @attr int `__max_no_of_threads`: Maximum number of threads to use for scraping. Defaults to 10.
+    @attr int `_max_no_of_threads`: Maximum number of threads to use for scraping. Defaults to 10.
 
     @attr list[str] `_scrapable_tags`: A tuple of HTML element tags the web scraper is permitted to scrape. By default, the web scraper is permitted
     to scrape all supported HTML element tags.
 
-    Default supported HTML5 element tags:
+    Default supported HTML element tags:
     To get these, do;
     >>> print(BS4WebScraper()._scrapable_tags)
 
@@ -123,7 +123,7 @@ class BS4BaseScraper:
     _auth_credentials: Dict[str, str] = None
     _is_authenticated: bool = False
     _level_reached: int = 0
-    __max_no_of_threads: int = 10
+    _max_no_of_threads: int = 10
     _session: requests.Session = requests.Session()
     _request_user_agent: str = None
     url_query_params: Dict = {}
@@ -141,15 +141,15 @@ class BS4BaseScraper:
     )
     _tc_: List = []
 
-    def __init__(self, parser: str = 'lxml', html_filename: str = "index.html", 
+    def __init__(self, parser: str = 'lxml', markup_filename: str = "index.html", 
                 no_of_requests_before_pause: int = 20, scrape_session_pause_duration: int | float | Any = "auto",
                 max_no_of_retries: int = 3, base_storage_dir: str = '.', storage_path: str = '', 
                 log_filepath: str | None = None, translation_engine: str | None = 'default') -> None:
         """
         Initializes the web scraper instance.
         """
-        if not html_filename.endswith('.html'):
-            raise FileError('`html_filename` should take the format `<filename>.html`.')
+        if not markup_filename.split('.')[-1] in ['xhtml', 'htm', 'shtml', 'html', 'xml']:
+            raise FileError('Unsupported filename for `markup_filename`')
         if scrape_session_pause_duration == 'auto':
             scrape_session_pause_duration = max(math.ceil(0.542 * no_of_requests_before_pause), 5)
         if translation_engine and (translation_engine != 'default' 
@@ -165,7 +165,7 @@ class BS4BaseScraper:
             self.translator.translation_engine = translation_engine
         self.translator.logger = self.logger
         self.parser = parser
-        self.html_filename = html_filename
+        self.markup_filename = markup_filename
         self.max_no_of_retries = max_no_of_retries
         self.base_storage_dir = os.path.abspath(base_storage_dir)
         self.storage_path = storage_path
@@ -174,7 +174,6 @@ class BS4BaseScraper:
                                                         scrape_session_pause_duration, 
                                                         self.max_no_of_retries, self.logger
                                                         )
-
 
     @property
     def is_authenticated(self):
@@ -205,7 +204,7 @@ class BS4BaseScraper:
         if __name == "_level_reached":
             if __value < 0:
                 raise ValueError(f"`{__name}` cannot be less than 0")
-        elif __name == "__max_no_of_threads":
+        elif __name == "_max_no_of_threads":
             if __value < 1:
                 raise ValueError(f"`{__name}` cannot be less than 1")
             if __value > 10:
@@ -319,7 +318,7 @@ class BS4BaseScraper:
                 
         no_of_threads = self.request_limit_setting.pause_duration // (self.request_limit_setting.max_request_count_per_second // self.request_limit_setting.pause_duration)
         no_of_threads = math.floor(math.log10(item_count * no_of_threads))
-        no_of_threads = min(no_of_threads, self.__max_no_of_threads)
+        no_of_threads = min(no_of_threads, self._max_no_of_threads)
         return no_of_threads if no_of_threads > 0 else 1
 
 
@@ -372,14 +371,15 @@ class BS4BaseScraper:
         # Scraping 'n' levels (for n >= 0)
         # Initially, Scrape base level -> 'n = 0'
         self.log(f'~~~SCRAPING BASE LEVEL~~~\n')
+        self.log('GETTING --> %s \n' % url)
         response = self.get(url)
         if response is not None:
-            index_file_hdl = self.save_to_file(self.html_filename, self.storage_path, content=response.content)
+            index_file_hdl = self.save_to_file(self.markup_filename, self.storage_path, content=response.content)
         else:
             raise Exception('Unexpected response: %s' % response)
 
-        soup = self.get_associated_files_and_return_soup(index_file_hdl) # get all ('*js', '*.css', font files, ...) of first page
-        self.save_to_file(self.html_filename, self.storage_path, content=soup.prettify(formatter='html5', encoding='utf-8'), translate=False)
+        soup = self.get_associated_files_and_return_soup(index_file_hdl)
+        self.save_to_file(self.markup_filename, self.storage_path, content=soup.prettify(encoding='utf-8'), translate=False)
 
         while scrape_depth > 0:
             # Start scraping at level 'n = n + 1'
@@ -391,21 +391,20 @@ class BS4BaseScraper:
                     results = executor.map(lambda link_tag: self.get_link_tag(link_tag, True), link_tags_sub_list)
             
             # Finished scraping level 'n = n + 1'
-            # Re-write html file from which the associated links and files were gotten with soup containing new attributes (link_href, script_src, image_src, href's etc.)
-            self.log("UPDATING HTML FILE WITH UPDATED ELEMENT ATTRIBUTES\n")
-            self.save_to_file(self.html_filename, self.storage_path, content=soup.prettify(formatter='html5', encoding='utf-8'), translate=False)
+            # Re-write markup file from which the associated links and files were gotten with soup containing new attributes (link_href, script_src, image_src, href's etc.)
+            self.save_to_file(self.markup_filename, self.storage_path, content=soup.prettify(encoding='utf-8'), translate=False)
             scrape_depth -= 1 
             self._level_reached += 1  
         
             # If `scrape_depth` is still greater than zero, prepare data for scraping next level
             if scrape_depth > 0:
                 results = filter(lambda result: isinstance(result, FileHandler) and all(result), results)
-                for html_file_hdl in results:
-                    html_file_hdl.open_file('r')
-                    soup = self.make_soup(html_file_hdl.file)
-                    self.storage_path = html_file_hdl.filepath
-                    self.html_filename = html_file_hdl.filename
-                    continue
+                for markup_file_hdl in results:
+                    markup_file_hdl.open_file('r')
+                    soup = self.make_soup(markup_file_hdl.file)
+                    self.storage_path = markup_file_hdl.filepath
+                    self.markup_filename = markup_file_hdl.filename
+            continue
         return None
 
 
@@ -499,7 +498,6 @@ class BS4BaseScraper:
             self.authenticate()
 
         if self.request_limit_setting is None:
-            self.log('GETTING --> %s \n' % url)
             response = self.session.get(url, headers=headers)
             resp_ok = self._handle_response(response)
             if resp_ok is False:
@@ -507,7 +505,6 @@ class BS4BaseScraper:
 
         else:
             if self.request_limit_setting.can_make_requests is True:
-                self.log('GETTING --> %s \n' % url)
                 response = self.session.get(url)
                 self.request_limit_setting.request_made()
                 resp_ok = self._handle_response(response)
@@ -531,7 +528,6 @@ class BS4BaseScraper:
         * `response` (requests.Response): request response.
         """
         if response.ok:
-            self.log('SUCCESS: REQUEST OK \n')
             return True
         else:
             self.log(f"REQUEST GOT RESPONSE CODE -> {response.status_code} \n", level='error')
@@ -573,10 +569,6 @@ class BS4BaseScraper:
         if not 'b' in mode and isinstance(content, bytes):
             raise TypeError("`mode` specified is a string mode. content provide is of type bytes not str")
 
-        # Translate content if necessary
-        if translate and (self.translate_to and filename.endswith('.html')):
-            content = self.translator.translate_markup(content, target_lang=self.translate_to)
-
         try:
             if os.path.isabs(storage_path):
                 if os.path.isdir(storage_path):
@@ -587,12 +579,16 @@ class BS4BaseScraper:
                 file_path = f"{self.base_storage_dir}\{storage_path}\{filename}"
                 
             file_hdl = FileHandler(file_path, encoding, exists_ok=True, allow_any=True)
-            file_hdl.write_to_file(content, mode) # write_mode
-            self.log(f"{'CREATED' if file_hdl.created_file else 'WROTE INTO'} FILE -> {file_path} \n")
+
+            # Translate content if necessary
+            if translate and (self.translate_to and file_hdl.filetype in ['xhtml', 'htm', 'shtml', 'html', 'xml']):
+                content = self.translator.translate_markup(content, target_lang=self.translate_to)
+
+            file_hdl.write_to_file(content, mode)
             return file_hdl
         
         except Exception as e:
-            self.log(e, level='error')
+            self.log(e.__str__(), level='error')
             pass
             
 
@@ -706,13 +702,11 @@ class BS4BaseScraper:
             if os.path.exists(f'{self.base_storage_dir}\{file_storage_path}\{filename}') is False:
                 response = self.get(url)
             else:
-                self.log("`%s` ALREADY EXISTS! \n" % f'{self.base_storage_dir}\{file_storage_path}\{filename}')
                 return FileHandler(f'{self.base_storage_dir}\{file_storage_path}\{filename}', exists_ok=True, allow_any=True)
 
         if response:
             downloaded_file_hdl = self.save_to_file(filename=filename, storage_path=file_storage_path, content=response.content)
             if downloaded_file_hdl:
-                self.log("`%s` DOWNLOADED! \n" % url)
                 if has_query_params:
                     self.url_query_params[url_obj.query] = downloaded_file_hdl 
 
@@ -720,22 +714,23 @@ class BS4BaseScraper:
         return None
 
 
-    def get_associated_files_and_return_soup(self, html_file_handler: FileHandler):
+    def get_associated_files_and_return_soup(self, markup_file_handler: FileHandler):
         '''
-        Scrapes all the soup tags present in `self._scrapable_tags`
-        
+        Scrapes all the soup tags present in `self._scrapable_tags`. The method simply get all the files associated to a markup
+        file. Files such as 'stylesheets', 'scripts', 'images', etc are gotten.
+
         Returns BeautifulSoup
 
         Args::
-        * `html_file_handler` (FileHandler): HTML FileHandler object.
+        * `markup_file_handler` (FileHandler): Markup FileHandler object.
         '''
-        if not isinstance(html_file_handler, FileHandler):
-            raise TypeError("`html_file_handler` should be of type FileHandler")
-        if html_file_handler.filetype not in ['html', 'xml']:
-            raise FileError('Unsupported file type. File handled is not "html" or "xml".')
+        if not isinstance(markup_file_handler, FileHandler):
+            raise TypeError("`markup_file_handler` should be of type FileHandler")
+        if markup_file_handler.filetype not in ['xhtml', 'htm', 'shtml', 'html', 'xml']:
+            raise FileError('Unsupported file type')
 
-        html_file_handler.open_file('r')
-        soup = self.make_soup(html_file_handler.file)
+        markup_file_handler.open_file('r')
+        soup = self.make_soup(markup_file_handler.file)
         tags = ResultSet(soup)
         for scrapable_tag in self._scrapable_tags:
             try:
@@ -757,7 +752,7 @@ class BS4BaseScraper:
             if isinstance(rra_file_hdl, FileHandler):
                 # Find the relative path starting from the directory of the file from which the tag was gotten to the directory of the downloaded file
                 src = self.get_rra_by_tag_name(tag.name)
-                start_path = os.path.dirname(html_file_handler.filepath) if html_file_handler.filepath else f'{self.base_storage_dir}\\{self.storage_path}'
+                start_path = os.path.dirname(markup_file_handler.filepath) if markup_file_handler.filepath else f'{self.base_storage_dir}\\{self.storage_path}'
                 dest_path = rra_file_hdl.filepath
                 s_p = os.path.relpath(dest_path, start=start_path)
                 s_p = s_p.replace('\\', '/')
@@ -796,7 +791,7 @@ class BS4BaseScraper:
 
         Returns None if it has no 'resource-related-attribute'
 
-        A 'resource-related-attribute' in this case refers to any HTML tag attribute that points to a resource. Examples of
+        A 'resource-related-attribute' in this case refers to any markup(HTML, XML, XHTML...) tag attribute that points to a resource. Examples of
         resource-related-attributes include; 'href'(of the <link> tag) and 'src'(of the <img> tag).
 
         Args::
@@ -837,13 +832,13 @@ class BS4BaseScraper:
         Returns None if it has no 'href'
         
         Args:
-        * `link_tag` (Tag): bs4 'HTML <a></a>' Tag object.
+        * `link_tag` (Tag): bs4 '<a></a>' Tag object.
         * `download` (bool, optional): Whether to download the page or file the link points to. Defaults to False.
         '''
         if not isinstance(link_tag, Tag):
             raise TypeError('`link_tag` should be of type Tag')
         if link_tag.name != 'a':
-            raise ValueError('`link_tag` should be an HTML "a" tag')
+            raise ValueError('`link_tag` should be an "a" tag')
 
         link_href = link_tag.get('href', None)
         if link_href:
@@ -853,10 +848,10 @@ class BS4BaseScraper:
 
             # Only scrape internal links, that is, links associated with the website being scraped only.
             if download and (base_url_obj.netloc and actual_url_obj.netloc) and (base_url_obj.netloc in actual_url_obj.netloc):
-                file_hdl = self.download_url(url=actual_url, save_as=self.html_filename, check_ext=False, unique_if_query_params=True)
+                file_hdl = self.download_url(url=actual_url, save_as=self.markup_filename, check_ext=False, unique_if_query_params=True)
                 # change the link_tag's href to be compatible with the scraped website
                 if file_hdl:
-                    # Find the relative path starting from the directory of the html file/page from which the link tag was gotten 
+                    # Find the relative path starting from the directory of the markup file/page from which the link tag was gotten 
                     # to the directory of the downloaded page
                     start_path = f'{self.base_storage_dir}\\{self.storage_path}'
                     dest_path = file_hdl.filepath
@@ -865,8 +860,7 @@ class BS4BaseScraper:
                     
                     new_soup = self.get_associated_files_and_return_soup(file_hdl)
                     # Re-write new_file with updated element attributes after all associated files have been gotten
-                    self.log("UPDATING HTML FILE WITH UPDATED ELEMENT ATTRIBUTES\n")
-                    file_hdl = self.save_to_file(self.html_filename, file_hdl.filepath, content=new_soup.prettify(formatter="html5", encoding='utf-8'), translate=False)
+                    file_hdl = self.save_to_file(self.markup_filename, file_hdl.filepath, content=new_soup.prettify(encoding='utf-8'), translate=False)
                     return file_hdl
             else:
                 return actual_url_obj.url

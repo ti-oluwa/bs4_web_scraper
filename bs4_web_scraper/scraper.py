@@ -25,7 +25,7 @@ class BS4WebScraper(BS4BaseScraper):
     #### BeautifulSoup4 web scraper class with support for authentication and translation.
 
     #### Instantiation and Example Usage: ::
-    >>> bs4_scraper = BS4WebScraper(parser='lxml', html_filename='google.html',
+    >>> bs4_scraper = BS4WebScraper(parser='lxml', markup_filename='google.html',
                         no_of_requests_before_pause=50, scrape_session_pause_duration='auto',
                         base_storage_dir='./google', storage_path='/', 
                         log_filepath='google.log', ...)
@@ -37,7 +37,7 @@ class BS4WebScraper(BS4BaseScraper):
     NOTE: On instantiation of the class, a new request session is created. This session is used to make all related requests.
 
     #### Parameters:
-    @param str `parser`: HTML or HTML/XML parser for BeautifulSoup. Default is "lxml", "html.parser" is another suitable parser.
+    @param str `parser`: Parser for BeautifulSoup. Default is "lxml", "html.parser" is another suitable parser.
 
     Available parsers: ::
     * "lxml"
@@ -49,10 +49,13 @@ class BS4WebScraper(BS4BaseScraper):
     * "html"
     * "html5"
     * "xml"
+    * "xhtml"
+    * "shtml"
+    * "htm"
     
     For more on parsers read the BeautifulSoup documentation [here](https://www.crummy.com/software/BeautifulSoup/bs4/doc/#installing-a-parser)
 
-    @param str `html_filename`: Default name used to save '*.html' files.
+    @param str `markup_filename`: Default name used to save markup files.
 
     @param int `no_of_requests_before_pause`: Defines the number of requests that can be made before a pause is taken.
     This should not exceed 50 to avoid high frequency requests. The upper limit is 100.
@@ -70,7 +73,7 @@ class BS4WebScraper(BS4BaseScraper):
     @param str `base_storage_dir`: The directory where the folder containing scraped website will be stored. Defaults to 
     the current directory.
 
-    @param str `storage_path`: Path where the base(index) HTML file will be saved with respect to the `base_storage_dir`.
+    @param str `storage_path`: Path where the base(index) markup file will be saved with respect to the `base_storage_dir`.
     Defaults to directly inside the `base_storage_dir`.
 
     @param str `log_filepath`: Name or path (relative or absolute) of the file logs will be written into. Defaults to '<self.__class__.__name__.lower()>.log'.
@@ -96,10 +99,10 @@ class BS4WebScraper(BS4BaseScraper):
 
     @attr int `__max_no_of_threads`: Maximum number of threads to use for scraping. Defaults to 10.
 
-    @attr list[str] `_scrapable_tags`: A tuple of HTML element tags the web scraper is permitted to scrape. By default, the web scraper is permitted
-    to scrape all supported HTML element tags.
+    @attr list[str] `_scrapable_tags`: A tuple of markup element tags the web scraper is permitted to scrape. By default, the web scraper is permitted
+    to scrape all supported markup element tags.
 
-    Default supported HTML5 element tags:
+    Default supported markup element tags:
     To get these, do;
     >>> print(BS4WebScraper()._scrapable_tags)
 
@@ -270,13 +273,13 @@ class BS4WebScraper(BS4BaseScraper):
                         depth: int = 0, count: int = None, recursive: bool = True):
         """
         Parses out the url/links on all elements with the target name in specified url.
-        NOTE: This only works for elements with a resource(url) related attribute. To get HTML elements with no resource related attribute, use `find_all_tags`.
+        NOTE: This only works for elements with a resource(url) related attribute. To get markup elements with no resource related attribute, use `find_all_tags`.
 
         Removes duplicates and returns a list of the links/urls.
 
         Args::
             * url (str): url of page to be parsed and scanned for target element.
-            * target (str): name of HTML element (with a url related attribute).
+            * target (str): name of markup element (with a url related attribute).
             * attrs (Dict[str, str] | Iterable[Dict[str, str]]): A dictionary or list of dictionaries of filters on attribute values.
             * depth (int): Number of levels to recursively search for target items. Defaults to 0.
             * count (int): Number of target items to be found on a url page before stopping.
@@ -321,13 +324,13 @@ class BS4WebScraper(BS4BaseScraper):
     def find_all_tags(self, url: str, target: str, attrs: Dict[str, str] | Iterable[Dict[str, str]] = {},
                         depth: int = 0, count: int = None, recursive: bool = True):
         """
-        Gets all HTML elements with the target name in specified url.
+        Gets all markup elements with the target name in specified url.
 
-        Returns a list of the HTML elements with the target name as bs4.element.Tag objects.
+        Returns a list of the markup elements with the target name as bs4.element.Tag objects.
 
         Args::
             * url (str): url of page to be parsed and scanned for target element.
-            * target (str): name of HTML element (with a url related attribute).
+            * target (str): name of markup element (with a url related attribute).
             * attrs (Dict[str, str] | Iterable[Dict[str, str]]): A dictionary or list of dictionaries of filters on attribute values.
             * depth (int): Number of levels to recursively search for target items. Defaults to 0.
             * count (int): Number of target items to be found on a url page before stopping.

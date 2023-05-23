@@ -111,7 +111,7 @@ class Logger:
         return None
 
     
-    def log(self, message: str, level: str | None = None) -> None:
+    def log(self, message: str, level: str | None = None):
         '''
         Logs a message to a file using the specified level. If no level is provided, the default level is INFO.
 
@@ -119,21 +119,11 @@ class Logger:
             message (str): The message to log
             level (str, optional): The level to log the message with. Defaults to "INFO".    
         '''
-        if level is None:
-            return self.log_info(message)
-    
-        match level.upper():
-            case "INFO":
-                return self.log_info(message)
-            case "DEBUG":
-                return self.log_debug(message)
-            case "WARNING":
-                return self.log_warning(message)
-            case "ERROR":
-                return self.log_error(message)
-            case "CRITICAL":
-                return self.log_critical(message)
-            
+        if level:
+            try:
+                return getattr(self, f"log_{level.lower()}")(message)
+            except AttributeError:
+                pass
         return self.log_info(message)
 
 

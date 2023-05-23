@@ -1,6 +1,6 @@
 """
 DESCRIPTION: ::
-    This module contains the Translator class for translating text and html content using the `translators` package.
+    This module contains the Translator class for translating text and markup (html, xml, xhtml...) content using the `translators` package.
 
     Avoid making high frequency requests to the translation engine. This may result in your IP address being blocked.
     Enterprises provide free services, we should be grateful instead of making trouble.
@@ -28,7 +28,7 @@ translation_engines = ts.translators_pool
 
 class Translator:
     """
-    #### Translator class for translating text and html content using the `translators` package.
+    #### Translator class for translating text and markup content using the `translators` package.
 
     #### Parameters:
     @param `translation_engine` (str): The translation engine to be used. Defaults to "bing".
@@ -38,8 +38,8 @@ class Translator:
     @attr `target_language` (str): The target language to translate to. Defaults to None.
     @attr `source_language` (str): The source language to translate from. Defaults to None.
     @attr `_cache` (Dict[str, str]): A cache for storing translations to manage translation cost. Defaults to an empty dict.
-    @attr `_translatable_elements` (List[str]): A list of HTML elements whose text can be translated. 
-    A defaults to a list of HTML elements have been provided. To add more elements,
+    @attr `_translatable_elements` (List[str]): A list of markup elements whose text can be translated. 
+    A defaults to a list of markup elements have been provided. To add more elements,
     use the `add_translatable_element` method. To remove elements, use the `remove_translatable_element` method.
     @attr supported_languages (dict): A dictionary of all languages supported by the chosen translation engine.
 
@@ -165,28 +165,28 @@ class Translator:
 
     def add_translatable_element(self, element: str) -> None:
         '''
-        Adds an HTML element to the list of translatable elements.
+        Adds an markup element to the list of translatable elements.
 
         Args:
-            element (str): The HTML element to be added to the list of translatable elements.
+            element (str): The markup element to be added to the list of translatable elements.
         '''
         if not isinstance(element, str):
             raise TypeError("Invalid type for `element`")
-        # Check if element is a valid HTML element
-        html_element = BeautifulSoup(f"<{element}></{element}>", 'html.parser').find(element)
-        if html_element:
+        # Check if element is a valid markup element
+        markup_element = BeautifulSoup(f"<{element}></{element}>", 'lxml').find(element)
+        if markup_element:
             self._translatable_elements.append(element)
             self._translatable_elements = list(set(self._translatable_elements))
         else:
-            raise ValueError(f"Invalid HTML element: {element}")
+            raise ValueError(f"Invalid markup element: {element}")
 
 
     def remove_translatable_element(self, element: str) -> None:
         '''
-        Removes an HTML element from the list of translatable elements.
+        Removes an markup element from the list of translatable elements.
 
         Args:
-            element (str): The HTML element to be removed from the list of translatable elements.
+            element (str): The markup element to be removed from the list of translatable elements.
         '''
         if element in self._translatable_elements:
             return self._translatable_elements.remove(element)
@@ -194,7 +194,7 @@ class Translator:
 
 
     def translate(self, content: str | bytes, src_lang: str="auto", target_lang: str="en", 
-                  cache: bool=True, html: bool=False, **kwargs) -> str | bytes:
+                  cache: bool=True, markup: bool=False, **kwargs) -> str | bytes:
         '''
         Translate `content` from `src_lang` to `target_lang` using `self.translator`.
 
@@ -205,11 +205,11 @@ class Translator:
             src_lang (str, optional): Source language. Defaults to "auto".
             target_lang (str, optional): Target language. Defaults to "en".
             cache (bool, optional): Whether to cache translations. Defaults to True.
-            html (bool, optional): Whether `content` is HTML content. Defaults to False.
-            **kwargs: Keyword arguments to be passed to `self.translate_text` or `self.translate_html`.
+            markup (bool, optional): Whether `content` is markup. Defaults to False.
+            **kwargs: Keyword arguments to be passed to `self.translate_text` or `self.translate_markup`.
         '''
-        if html:
-            return self.translate_html(content, src_lang, target_lang, **kwargs)
+        if markup:
+            return self.translate_markup(content, src_lang, target_lang, **kwargs)
         return self.translate_text(content, src_lang, target_lang, cache, **kwargs)
         
     
@@ -268,15 +268,15 @@ class Translator:
 
     def translate_markup(self, markup: str | bytes, src_lang: str="auto", target_lang: str="en", **kwargs) -> str | bytes:
         '''
-        Translates the HTML/XML markup.
+        Translates markup.
 
         Returns the translated markup.
 
         Args:
-            markup (str | bytes): HTML/XML content to be translated
+            markup (str | bytes): markup content to be translated
             src_lang (str, optional): Source language. Defaults to "auto".
             target_lang (str, optional): Target language. Defaults to "en".
-            **kwargs: Keyword arguments to be passed to `translators.translate_html`.
+            **kwargs: Keyword arguments to be passed to `translators.translate_markup`.
                     :param is_detail_result: boolean, default False.
                     :param professional_field: str, support baidu(), caiyun(), alibaba() only.
                     :param timeout: float, default None.
@@ -297,7 +297,7 @@ class Translator:
         is_bytes = isinstance(markup, bytes)
 
         soup = BeautifulSoup(markup, 'lxml')
-        translated_markup = self.translate_soup(soup, src_lang, target_lang, **kwargs).prettify(formatter="html5")
+        translated_markup = self.translate_soup(soup, src_lang, target_lang, **kwargs).prettify()
 
         # re-encode the markup if the initial markup was in bytes
         if is_bytes:
@@ -306,19 +306,19 @@ class Translator:
 
 
     # NOT FUNCTIONAL FOR NOW
-    # def translate_html(self, html: str | bytes, src_lang: str="auto", target_lang: str="en", **kwargs):
+    # def translate_markup(self, markup: str | bytes, src_lang: str="auto", target_lang: str="en", **kwargs):
     #     '''
-    #     Translates the html content from `src_lang` to `target_lang` using `self.translator`.
+    #     Translates the markup content from `src_lang` to `target_lang` using `self.translator`.
 
-    #     ### NOT FUNCTIONAL FOR NOW. CONVERT HTML TO BEAUTIFULSOUP OBJECT AND USE THE `translate_soup` METHOD INSTEAD.
+    #     ### NOT FUNCTIONAL FOR NOW. CONVERT markup TO BEAUTIFULSOUP OBJECT AND USE THE `translate_soup` METHOD INSTEAD.
 
-    #     Returns translated html.
+    #     Returns translated markup.
 
     #     Args:
-    #         html (str | bytes): HTML content to be translated
+    #         markup (str | bytes): markup content to be translated
     #         src_lang (str, optional): Source language. Defaults to "auto".
     #         target_lang (str, optional): Target language. Defaults to "en".
-    #         **kwargs: Keyword arguments to be passed to `translators.translate_html`.
+    #         **kwargs: Keyword arguments to be passed to `translators.translate_markup`.
     #                 :param is_detail_result: boolean, default False.
     #                 :param professional_field: str, support baidu(), caiyun(), alibaba() only.
     #                 :param timeout: float, default None.
@@ -334,24 +334,24 @@ class Translator:
     #                 :param show_time_stat_precision: int, default 4.
     #                 :param lingvanex_model: str, default 'B2C'.
     #     '''
-    #     if not isinstance(html, (str, bytes)):
-    #         raise TypeError("Invalid type for `html`")
+    #     if not isinstance(markup, (str, bytes)):
+    #         raise TypeError("Invalid type for `markup`")
     #     self.set_target_and_src_lang(target_lang, src_lang)
     #     kwargs_ = {
     #         'if_ignore_empty_query': True,
     #     }
     #     kwargs_.update(kwargs)
-    #     html = html.decode('utf-8') if isinstance(html, bytes) else html
+    #     markup = markup.decode('utf-8') if isinstance(markup, bytes) else markup
     #     try:
-    #         translated_html = ts.translate_html(
-    #                                         html_text=html, to_language=target_lang, from_language=src_lang, 
+    #         translated_markup = ts.translate_markup(
+    #                                         markup_text=markup, to_language=target_lang, from_language=src_lang, 
     #                                         translator=self.translation_engine, **kwargs_
     #                                         )
-    #         return translated_html
+    #         return translated_markup
     #     except Exception as e:
-    #         error_ = TranslationError(f"Error translating html: {e}") 
+    #         error_ = TranslationError(f"Error translating markup: {e}") 
     #         self._log(f"{error_}", level='error')
-    #         return html
+    #         return markup
 
 
     def translate_file(self, filepath: str, src_lang: str="auto", target_lang: str="en", **kwargs):
@@ -389,6 +389,10 @@ class Translator:
         kwargs_.update(kwargs)
         file_handler = FileHandler(filepath, not_found_ok=False)
         file_content = file_handler.read_file()
+
+        if file_handler.filetype in ['xhtml', 'htm', 'shtml', 'html', 'xml']:
+            return self.translate_markup(file_content, src_lang, target_lang, **kwargs)
+
         slice_size = kwargs_.get('limit_of_length', 4000)
         contents = utils.slice_iterable(file_content, slice_size)
         try:

@@ -56,7 +56,7 @@ bs4_scraper = BS4WebScraper()
 # To customize the scraper's settings, pass a dictionary of the preferred instantiation parameters to the scraper object.
 params = {
     "parser": "html.parser",
-    "html_filename": "base.html",
+    "markup_filename": "base.html",
     "log_filepath": "./scrape_log/log.txt",
     "no_of_requests_before_pause": 30, # This should not exceed 50 to avoid high frequency requests. The upper limit is 100
     "scrape_session_pause_duration": 20, # pause duration in seconds. It is advisable to leave this at its default, "auto".
