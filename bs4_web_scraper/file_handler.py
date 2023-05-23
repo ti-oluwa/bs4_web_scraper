@@ -17,7 +17,7 @@ class FileHandler:
 
     #### Supported File Types:
     .csv, .json, .txt, .html, .xml, .yml, .yaml, .js, .css, .md, .toml
-    .doc, .docx, .pdf, .pickle, .pkl, .log. Mostly text based file types.
+    .doc, .docx, .pdf, .pickle, .pkl, .log, 'htm', 'xht', etc. Mostly text based file types.
 
     #### Parameters:
     @param str `filepath`: path to the file to be read or written to.
@@ -83,7 +83,7 @@ class FileHandler:
         filename = self.filepath.replace(os.path.dirname(self.filepath), '')
         return filename.replace('\\', '')
     
-    
+
     @property
     def file_content(self):
         return self.read_file('r')
@@ -94,7 +94,7 @@ class FileHandler:
         return (
         'txt', 'doc', 'docx', 'pdf', 'html', 'htm', 'xml',
          'js', 'css', 'md', 'json', 'csv', 'yaml', 'yml', 
-         'toml', 'pickle', 'pkl', 'log',
+         'toml', 'pickle', 'pkl', 'log', 'xht', 'xhtml', 'shtml',
         )
 
 
