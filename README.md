@@ -15,12 +15,19 @@
 - toml
 
 
-## Setup
+## Setup Local Development Environment
 
 1. Make sure you have python3 installed on your local machine.
 2. Clone the repository to local machine into your project directory.
 3. Change directory into the repository "bs4_web_scraper" and `pip install -r requirements.txt`. You're ready to go if the installations were successful.
 4. For a quick demo, run `example.py`.
+
+
+## Installation
+
+1. Make sure you have python3 installed on your local machine.
+2. Run pip install `bs4-web-scraper`.
+3. Import the module into your project and you're good to go.
 
 
 ## Features
