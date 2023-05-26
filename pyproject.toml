@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bs4_web_scraper"
+version = "0.0.1a"
+authors = [
+  { name="ti-oluwa", email="tioluwa.dev@gmail.com" },
+]
+maintainers = [
+  { name="ti-oluwa", email="tioluwa.dev@gmail.com" },
+]
+description = "A web scraper based on the BeautifulSoup4 library and translators package."
+keywords = [
+    'web scraper', 'bs4', 'beautifulsoup4', 
+    'web scraping', 'web scraping with python', 'web scraping with bs4', 
+    'web scraping with beautifulsoup4', 'web scraping with translation', 
+    'web scraping with translation to other languages', 
+    'web scraping with translation to other languages with python', 'web scraping with translation to other languages with bs4', 
+    'web scraping with translation to other languages with beautifulsoup4', 'web scraping with translation to other languages with python and bs4', 
+    'web scraping with translation to other languages with python and beautifulsoup4',
+]
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+]
+dependencies = [
+    'beautifulsoup4>=4.11.2',
+    'lxml>=4.9.2',
+    'requests>=2.28.1',
+    'html5lib>=1.1',
+    'urllib3>=1.26.13',
+    'pytz>=2022.7.1',
+    'translators>=5.5.6',
+    'toml',
+    'pyyaml',
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ti-oluwa/bs4_web_scraper"
+"Bug Tracker" = "https://github.com/ti-oluwa/bs4_web_scraper/issues"
+"Repository" = "https://github.com/ti-oluwa/bs4_web_scraper"

@@ -33,7 +33,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__version__ = '0.0.3'
+__version__ = '0.0.1'
 __date__ = ''
 __author__ = 'ti-oluwa'
 __doc__ = 'A web scraper that uses BeautifulSoup4 to scrape web pages and can translate them to other languages.'
