@@ -2,7 +2,7 @@
 
 ### __A web scraper based on the BeautifulSoup4 library with translation capabilities.__
 
-[PyPI](https://pypi.org/project/bs4-web-scraper/)
+[View Project on PyPI](https://pypi.org/project/bs4-web-scraper/)
 
 
 ## Dependencies
@@ -210,7 +210,7 @@ The following are some useful methods for scraping web data using the scraper cl
 
 - `download_url`
 - `download_urls`
-- `find_all`
+- `find_urls`
 - `find_all_tags`
 - `find_links`
 - `find_stylesheets`
@@ -247,8 +247,9 @@ from bs4_web_scraper.<module_name> import <class_name>
 
 ```
 
-
 ### Scraper Methods
+
+**Before proceeding, it is important to know what an 'rra' means. 'rra' stands for 'resource related attribute'. A resource related attribute is an attribute that is related to a file(resource) that the webpage is dependent on. For example, the `href` attribute of an `a` tag is a resource related attribute because it is related to the resource (link) that the `a` tag points to. The `src` attribute of an `img` tag is also a resource related attribute because it is related to the resource (image) that the `img` tag points to.**
 
 #### `download_url`
 
@@ -302,7 +303,190 @@ bs4_scraper.download_urls(urls=urls, save_to="downloads")
 
 ```
 
-#### `find_all`
+#### `find_urls`
+
+This method is used to get all resource related attribute(url or link) on elements that match a given tag name. This method only works for tags that have the `src` or `href` attribute. The following example shows how to find all urls on the `img` elements in a web page:
+
+```python
+# Finding all urls on the img elements on a web page with a class of 'sub-image', saving them to a file and downloading them
+
+img_urls = bs4_scraper.find_urls(url='https://example.com/',target="img", attrs={"class": "sub-image"})
+# save the urls to a file using the save_results method
+bs4_scraper.save_results(results=img_urls, file_path="downloads/img_urls.txt")
+# download the urls using the download_urls method
+bs4_scraper.download_urls(urls=img_urls, save_to="downloads")
+
+```
+
+#### `find_all_tags`
+
+This method is used to get all elements that match a given tag name. A simple example usage is shown below:
+
+```python
+
+# Finding all small elements from a url going two levels deep
+small_elements = bs4_scraper.find_all_tags(url='https://example.com/',target="small", depth=2)
+print(small_elements)
+
+```
+
+#### `find_links`
+
+This method is used to get the `href` on all `a` element. A simple example usage is shown below:
+
+```python
+
+# Finding all links on a web page
+links = bs4_scraper.find_links(url='https://example.com/')
+print(links)
+
+```
+
+**  All `find_*` methods have the same usage as the `find_links` method. For example, the `find_stylesheets` method is used to get the `href` on all `link` element with a `rel` attribute of `stylesheet`. A simple example usage is shown below:**
+
+```python
+
+# Finding all stylesheets on a web page
+stylesheets = bs4_scraper.find_stylesheets(url='https://example.com/')
+print(stylesheets)
+
+```
+
+#### `find_pattern`
+
+This method is used to find all elements that match a given REGEX pattern. A simple example usage is shown below:
+
+```python
+
+# Finding all elements that match a email REGEX pattern
+pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+emails = bs4_scraper.find_pattern(url='https://example.com/', regex=pattern)
+print(emails)
+
+```
+
+### Utility Classes
+
+#### `Translator`
+
+This class is simply used to translate text, a file or soup from one language to another. The following example shows how to translate text from English to Yoruba:
+
+```python
+from bs4_web_scraper.translate import Translator
+
+# Translating text from English to Yoruba
+translator = Translator(translation_engine="google")
+translated_text = translator.translate(content="Hello World", src_lang="en", target_lang="yo")
+print(translated_text)
+
+# If content is markup
+translated_text = translator.translate(content="<p>Hello World</p>", src_lang="en", target_lang="yo", is_markup=True)
+print(translated_text)
+
+```
+
+To translate a file, you can pass the file path to the `translate` method as shown below:
+
+```python
+
+# Translating a file from English to Yoruba
+translator = Translator(translation_engine="google")
+translated_file_handler = translator.translate_file(file_path="path/to/file.txt", src_lang="en", target_lang="yo")
+print(translated_file_handler.file_content)
+
+```
+
+To translate a soup object, you can pass the soup object to the `translate` method as shown below:
+
+```python
+
+# Translating a soup object from English to Yoruba
+translator = Translator(translation_engine="google")
+translated_soup = translator.translate(content=soup, src_lang="en", target_lang="yo")
+
+```
+For specificity, you can use the `translate_text`, `translate_markup` or `translate_soup` methods to translate text, markup or a soup respectively. 
+
+
+#### `FileHandler`
+
+The `FileHandler` class is used to handle files and perform basic read-write operations on supported file types.
+
+**Example Usage**
+
+```python
+from bs4_web_scraper.file_handler import FileHandler
+
+# Instantiating a FileHandler object
+file_handler = FileHandler(file_path="path/to/file.txt")
+
+# Opening the file
+file_handler.open_file()
+
+# Closing the file
+file_handler.close_file()
+
+# Reading the file
+file_content = file_handler.read_file(read_mode='r')
+print(file_content)
+
+# Writing to the file
+file_handler.write_to_file(content="Hello World", write_mode='w')
+
+# Appending to the file
+file_handler.write_to_file(content="Hello World", write_mode='a')
+
+# Copying the file
+file_handler.copy_to(destination="path/to/copy.txt")
+
+# Moving the file
+file_handler.move_to(destination="path/to/move.txt")
+
+# Clearing the file content
+file_handler.clear_file()
+
+# Deleting the file
+file_handler.delete_file()
+
+# Getting the file type
+file_type = file_handler.filetype
+print(file_type)
+
+# Getting the file name
+file_name = file_handler.name
+print(file_name)
+
+# Getting the file path
+file_path = file_handler.filepath
+print(file_path)
+
+```
+
+
+#### `Logger`
+
+This class is used to log messages to a file and/or console. The following example shows how to log messages to a file:
+
+```python
+from bs4_web_scraper.logging import Logger
+
+# Instantiating a Logger object
+logger = Logger(name="example_logger", log_filepath="path/to/log.txt")
+
+# To log the message to the console also
+logger.to_console = True
+
+# Set the log level
+logger.set_base_level(level="DEBUG")
+
+# Log a message
+logger.log(message="Hello World") # Default log level is INFO
+
+# Log a message with a specific log level
+logger.log(message="Hello World", level="DEBUG")
+
+```
+The base log level can be set to any of the following: `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. The default log level is `NOTSET`. The `to_console` attribute is set to `False` by default. To log messages to the console, set the `to_console` attribute to `True` as shown in the example above. You cannot log at levels below the base log level. For example, if the base log level is set to `INFO`, you cannot log at `DEBUG` level.
 
 
 

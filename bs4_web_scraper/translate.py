@@ -193,23 +193,25 @@ class Translator:
         return None
 
 
-    def translate(self, content: str | bytes, src_lang: str="auto", target_lang: str="en", 
-                  cache: bool=True, markup: bool=False, **kwargs) -> str | bytes:
+    def translate(self, content: str | bytes | BeautifulSoup, src_lang: str="auto", target_lang: str="en", 
+                  cache: bool=True, is_markup: bool=False, **kwargs) -> str | bytes:
         '''
         Translate `content` from `src_lang` to `target_lang` using `self.translator`.
 
         Returns translated content.
 
         Args:
-            content (str | bytes): Content to be translated
+            content (str | bytes | BeatifulSoup): Content to be translated
             src_lang (str, optional): Source language. Defaults to "auto".
             target_lang (str, optional): Target language. Defaults to "en".
             cache (bool, optional): Whether to cache translations. Defaults to True.
-            markup (bool, optional): Whether `content` is markup. Defaults to False.
+            is_markup (bool, optional): Whether `content` is markup. Defaults to False.
             **kwargs: Keyword arguments to be passed to `self.translate_text` or `self.translate_markup`.
         '''
-        if markup:
+        if is_markup:
             return self.translate_markup(content, src_lang, target_lang, **kwargs)
+        elif isinstance(content, BeautifulSoup):
+            return self.translate_soup(content, src_lang, target_lang, **kwargs)
         return self.translate_text(content, src_lang, target_lang, cache, **kwargs)
         
     
