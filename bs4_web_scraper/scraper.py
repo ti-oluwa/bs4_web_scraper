@@ -123,7 +123,8 @@ class BS4WebScraper(BS4BaseScraper):
     """
 
     
-    def scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None=None, translate_to: str = None) -> None:
+    def scrape(self, url: str, scrape_depth: int = 0, credentials: Dict[str, str] | None=None, 
+                translate_to: str = None, translation_engine: str = "default") -> None:
         """
         #### Wrapper function for the private `_scrape` function of the class.
 
@@ -136,7 +137,13 @@ class BS4WebScraper(BS4BaseScraper):
             credentials (Dict[str, str], optional): Authentication or login details for website. Defaults to None.
             translate_to (str, optional): Language code for the language scraped content will be translated to. The source language
             is automatically detected by `self.translator`. Defaults to None.
+            translation_engine (str, optional): The translation engine to use for translation. Case sensitive. Defaults to 'default'. This can be any of the supported translation engines.
+            See `translators` package for more information or do:
 
+        #### Supported translation engines:
+        To get a list of the supported translation engines do:
+        >>> print(bs4_web_scraper.translation_engines)
+        
         #### AUTHENTICATION
         To scrape websites that require authentication. pass in the authentication credentials as an argument to the function.
         #### NOTE: credentials should take the format
@@ -146,6 +153,9 @@ class BS4WebScraper(BS4BaseScraper):
             'auth_password_field': '<password_field_name>',
             'auth_username': '<username>',
             'auth_password': '<password>',
+            'additional_auth_fields': {
+                '<Field Name>': '<Field Value>',
+            },
         }
         bs4_scraper = BS4WebScraper(...)
         bs4_scraper.scrape(..., credentials=credentials)
@@ -171,11 +181,10 @@ class BS4WebScraper(BS4BaseScraper):
         self.log("STARTING SCRAPING ACTIVITY...\n")
         self.log(f"SCRAPING DEPTH: {scrape_depth if scrape_depth > 0 else 'BASE LEVEL'}\n")
         if translate_to:
-            self.log(f"TRANSLATION ENGINE: {self.translator.translation_engine.upper()}\n")
             self.log(f"TRANSLATING TO: {translate_to.upper()}\n")
 
         start_time = time.perf_counter()
-        super()._scrape(url, scrape_depth, credentials, translate_to)
+        super()._scrape(url, scrape_depth, credentials, translate_to, translation_engine)
         finish_time = time.perf_counter()
         time_taken = finish_time - start_time
 
@@ -192,7 +201,7 @@ class BS4WebScraper(BS4BaseScraper):
         return None
 
     
-    def download_urls(self, urls: Iterable[Dict[str, str]], save_to: str | None = None, 
+    def download_urls(self, urls: Iterable[Dict[str, str]], save_to: str | None = None, overwrite: bool = False,
                         check_ext: bool = True, fast_download: bool = False, unique_if_query_params: bool = False):
         '''
         Download files from the given urls using the `download_url` method. Saves the files in a storage path in `self.base_storage_dir`.
@@ -202,6 +211,7 @@ class BS4WebScraper(BS4BaseScraper):
         Args:
             - urls (List[Dict[str, str]]): List of urls to be downloaded. The url in the list should be of type dict[str, str].
             - save_to Optional[str]: Path to the directory where the file should be saved in `self.base_storage_dir`.
+            - overwrite (bool, optional): Whether to overwrite existing files. Defaults to False.
             - check_ext (bool, optional): Whether to check for extension in the url and use it for filename validation. Defaults to True.
             Check the doc string of `download_url` for more info on setting this value.
             - unique_if_query_params (bool, optional): Whether to generate a unique filename if the any of the urls has query params. Defaults to False.
@@ -223,7 +233,10 @@ class BS4WebScraper(BS4BaseScraper):
             raise ValueError("No valid url was found in `urls`")
 
         results = []
-        params = {'save_to': save_to, 'check_ext': check_ext, 'unique_if_query_params': unique_if_query_params}
+        params = {
+            'save_to': save_to, 'overwrite': overwrite, 
+            'check_ext': check_ext, 'unique_if_query_params': unique_if_query_params
+        }
         urls_download_params = map(lambda dict: {**params, **dict}, urls)
 
         if fast_download and len(urls) <= 200:

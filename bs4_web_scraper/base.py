@@ -24,7 +24,6 @@ from .request_limiter import RequestLimitSetting
 from .file_handler import FileHandler
 
 
-# SCRAPE SITES WITH PAGINATION
 class BS4BaseScraper:
     """
     #### Base web scraper class
@@ -78,16 +77,7 @@ class BS4BaseScraper:
     For instance:
     >>> bs4_scraper = BS4WebScraper(..., log_filepath="/<directory_path>/<filename>/")
 
-    @param str `translation_engine`: The translation engine to use for translation. Case sensitive. Defaults to 'google'. This can be any of the supported translation engines.
-    If the translation engine is not supported, the default translation engine will be used. See `translators` package for more information or do:
 
-    To use a different translation engine, do:
-    >>> bs4_scraper = BS4WebScraper(..., translation_engine='bing')
-
-    #### Supported translation engines:
-    To get a list of the supported translation engines do:
-    >>> print(bs4_web_scraper.translation_engines)
-    
     #### Attributes:
     @attr str `base_url`: The base url of the website being scraped. The base url is the url that will be used to construct the absolute url of all relative urls in a website.
 
@@ -127,7 +117,7 @@ class BS4BaseScraper:
     _session: requests.Session = requests.Session()
     _request_user_agent: str = None
     url_query_params: Dict = {}
-    translator: translate.Translator = translate.Translator()
+    translator: translate.Translator = None
     translate_to: str | None = None
     logger: Logger = None
     _scrapable_tags = (
@@ -144,7 +134,7 @@ class BS4BaseScraper:
     def __init__(self, parser: str = 'lxml', markup_filename: str = "index.html", 
                 no_of_requests_before_pause: int = 20, scrape_session_pause_duration: int | float | Any = "auto",
                 max_no_of_retries: int = 3, base_storage_dir: str = '.', storage_path: str = '', 
-                log_filepath: str | None = None, translation_engine: str | None = 'default') -> None:
+                log_filepath: str | None = None) -> None:
         """
         Initializes the web scraper instance.
         """
@@ -152,18 +142,12 @@ class BS4BaseScraper:
             raise FileError('Unsupported filename for `markup_filename`')
         if scrape_session_pause_duration == 'auto':
             scrape_session_pause_duration = max(math.ceil(0.542 * no_of_requests_before_pause), 5)
-        if translation_engine and (translation_engine != 'default' 
-                                    and translation_engine not in translate.translation_engines):
-            raise UnsupportedLanguageError("Unsupported translation engine")
 
         if log_filepath:
             self.logger = Logger(name=f"Logger for {self.__class__.__name__}", log_filepath=log_filepath)
             self.logger.set_base_level('INFO')
             self.logger.to_console = True
 
-        if translation_engine != "default":
-            self.translator.translation_engine = translation_engine
-        self.translator.logger = self.logger
         self.parser = parser
         self.markup_filename = markup_filename
         self.max_no_of_retries = max_no_of_retries
@@ -270,7 +254,7 @@ class BS4BaseScraper:
             'additional_auth_fields',
         )
         for cr in req_cr:
-            if not credentials.get(cr, None):
+            if not credentials.get(cr, None) and cr != 'additional_auth_fields':
                 raise KeyError(f"`{cr}` not found in `credentials`")
 
         for key, value in credentials.items():
@@ -295,8 +279,8 @@ class BS4BaseScraper:
         Args:
             credentials (Dict[str, str]): Authentication credentials
         '''
+        self.set_base_url(credentials['auth_url'])
         self._auth_url = self._validate_auth_credentials(credentials)
-        self.set_base_url(self._auth_url)
 
         if not self.base_url:
             raise AttributeError("`self.base_url` must be set.")
@@ -361,7 +345,26 @@ class BS4BaseScraper:
         return None
 
 
-    def _scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None = None, translate_to: str | None = None) -> None:
+    def set_translator(self, translation_engine: str = "default") -> None:
+        """
+        Sets the translator to use for translation.
+
+        Args:
+            translation_engine (str): The translation engine to use. 
+        """
+        if translation_engine and (translation_engine != 'default' 
+                                    and translation_engine not in translate.translation_engines):
+                raise UnsupportedLanguageError("Unsupported translation engine")
+
+        self.translator = translate.Translator()
+        if translation_engine != "default":
+            self.translator.translation_engine = translation_engine
+        self.translator.logger = self.logger
+        return None
+
+
+    def _scrape(self, url: str, scrape_depth: int = 0, credentials: Dict[str, str] | None = None, 
+                translate_to: str | None = None, translation_engine: str = "default"):
         '''
         Main scraping method.
         
@@ -370,7 +373,11 @@ class BS4BaseScraper:
         * This method is not thread safe. It is not meant to be called by multiple threads.
         '''
         if translate_to:
+            if not self.translator:
+                self.set_translator(translation_engine)
+            self.log(f"TRANSLATION ENGINE: {self.translator.translation_engine.upper()}\n")
             self.translate_to = translate_to
+
         if self.level_reached == 0:
             self._base_url = self.get_base_url(url)
         if credentials:
@@ -416,7 +423,7 @@ class BS4BaseScraper:
         return None
 
 
-    def scrape(self, url: str, scrape_depth: int = 1, credentials: Dict[str, str] | None=None, translate_to: str = None) -> None:
+    def scrape(self, url: str, scrape_depth: int = 0, credentials: Dict[str, str] | None=None, translate_to: str = None) -> None:
         """
         #### Wrapper function for the private `_scrape` function of the class.
 
@@ -633,7 +640,7 @@ class BS4BaseScraper:
         return src
         
 
-    def download_url(self, url: str, save_as: str | None = None, save_to: str | None = None, 
+    def download_url(self, url: str, save_as: str | None = None, save_to: str | None = None, overwrite: bool = False,
                         check_ext: bool = True, unique_if_query_params: bool = False):
         '''
         Download file from the given url. Saves the file in a storage path in `self.base_storage_dir`.
@@ -644,6 +651,7 @@ class BS4BaseScraper:
         * url (str): Url to be downloaded.
         * save_as Optional[str]: Name of the file to be downloaded or name with which the file should be saved.
         * save_to Optional[str]: Path to the directory where the file should be saved in `self.base_storage_dir`.
+        * overwrite (bool, optional): Whether to overwrite the file if it already exists. Defaults to False.
         * check_ext (bool, optional): Whether to check for extension in the url and use it for filename validation. Defaults to True.
         * unique_if_query_params (bool, optional): Whether to add a unique string to the filename if the url has query parameters. Defaults to False.
         
@@ -662,11 +670,11 @@ class BS4BaseScraper:
         Example Usage::
             >>> bs4_scraper.download_url(url="https://example.com/", save_as="example.html", save_to="/examples", check_ext="False")
         '''
-        url_obj = parse_url(url)
+        url_obj = parse_url(url.removesuffix('/'))
         if not url_obj.netloc:
             raise InvalidURLError
     
-        url_based_name, url_based_ext = os.path.splitext((url_obj.path or '').split('/')[-1])
+        url_based_name, url_based_ext = os.path.splitext((url_obj.path or '').removesuffix('/').split('/')[-1])
         if check_ext and not url_based_ext:
             raise ValueError('Invalid url. No extension found in url. The url may be incorrect.')
         filename = f"{url_based_name}{url_based_ext}"
@@ -684,18 +692,14 @@ class BS4BaseScraper:
         if not filename:
             raise ValueError('`filename` seems to be empty. Please check the url "%s" or provide a `save_as` name.' % url)
 
-        has_query_params = False
         response = None
         file_storage_path = save_to.replace('/', '\\').strip() if save_to is not None else save_to
         # check if element src has query params
-        if url_obj.query:
-            has_query_params = True
+        has_query_params = bool(url_obj.query)
         if file_storage_path is None:
             file_storage_path = self.parse_storage_path_from_Url(url_obj, remove_str=f"{url_based_name}{url_based_ext}")
             # Clean up storage path
-            file_storage_path = file_storage_path.replace(filename, '') if file_storage_path.endswith(f"{url_based_name}{url_based_ext}") else file_storage_path
-            file_storage_path = file_storage_path[:-1] if file_storage_path.endswith('\\') else file_storage_path
-            file_storage_path = file_storage_path[1:] if file_storage_path.startswith('\\') else file_storage_path        
+            file_storage_path = file_storage_path.removeprefix('\\').removesuffix('\\')        
                 
         if has_query_params and (url_obj.query not in self.url_query_params.keys()):
             if unique_if_query_params is True:
@@ -705,20 +709,22 @@ class BS4BaseScraper:
             file_hdl: FileHandler = self.url_query_params[url_obj.query]
             return file_hdl
             
-
         if not has_query_params or (url_obj.query not in self.url_query_params.keys()):
             # check if file already exists
             if os.path.exists(f'{self.base_storage_dir}\{file_storage_path}\{filename}') is False:
-                response = self.get(url)
+                response = self.get(url_obj.url)
             else:
-                return FileHandler(f'{self.base_storage_dir}\{file_storage_path}\{filename}', exists_ok=True, allow_any=True)
+                file_hdl = FileHandler(f'{self.base_storage_dir}\{file_storage_path}\{filename}', exists_ok=True, allow_any=True)
+                if overwrite is True:
+                    file_hdl.delete_file()
+                    response = self.get(url_obj.url)
+                else:
+                    return file_hdl
 
         if response:
             downloaded_file_hdl = self.save_to_file(filename=filename, storage_path=file_storage_path, content=response.content)
-            if downloaded_file_hdl:
-                if has_query_params:
-                    self.url_query_params[url_obj.query] = downloaded_file_hdl 
-
+            if downloaded_file_hdl and has_query_params:
+                self.url_query_params[url_obj.query] = downloaded_file_hdl 
             return downloaded_file_hdl
         return None
 
@@ -755,19 +761,23 @@ class BS4BaseScraper:
             except Exception:
                 raise InvalidScrapableTagError(f"Invalid scrapable_tag, `{scrapable_tag}`, found in `self._scrapable_tags`")
 
-        for tag in tags:
-            rra_file_hdl = self.get_tag_rra(tag, download=True)
-            # change the element's src to be compatible with the scraped website
-            if isinstance(rra_file_hdl, FileHandler):
-                # Find the relative path starting from the directory of the file from which the tag was gotten to the directory of the downloaded file
-                src = self.get_rra_by_tag_name(tag.name)
-                start_path = os.path.dirname(markup_file_handler.filepath) if markup_file_handler.filepath else f'{self.base_storage_dir}\\{self.storage_path}'
-                dest_path = rra_file_hdl.filepath
-                s_p = os.path.relpath(dest_path, start=start_path)
-                s_p = s_p.replace('\\', '/')
-                tag[src] = s_p if s_p.startswith('.') else f'./{s_p}'
-            continue
+        with ThreadPoolExecutor() as executor:
+            _ = executor.map(lambda tag: self._get_tag_rra(tag, markup_file_handler), tags)
         return soup
+
+
+    def _get_tag_rra(self, tag: Tag, markup_file_handler: FileHandler):
+        rra_file_hdl = self.get_tag_rra(tag, download=True)
+        # change the element's src to be compatible with the scraped website
+        if isinstance(rra_file_hdl, FileHandler):
+            # Find the relative path starting from the directory of the file from which the tag was gotten to the directory of the downloaded file
+            src = self.get_rra_by_tag_name(tag.name)
+            start_path = os.path.dirname(markup_file_handler.filepath) if markup_file_handler.filepath else f'{self.base_storage_dir}\\{self.storage_path}'
+            dest_path = rra_file_hdl.filepath
+            s_p = os.path.relpath(dest_path, start=start_path)
+            s_p = s_p.replace('\\', '/')
+            tag[src] = s_p if s_p.startswith('.') else f'./{s_p}'
+        return None
 
 
     def get_actual_url_from_rra(self, rra: str):
