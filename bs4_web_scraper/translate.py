@@ -112,7 +112,7 @@ class Translator:
 
     def lang_is_supported(self, lang_code: str) -> bool:
         '''
-        Check if the specified language code is supported by `self.translator`
+        Check if the specified language code is supported by `self.translation_engine`
         
         Returns True if supported, else False.
 
@@ -196,7 +196,7 @@ class Translator:
     def translate(self, content: str | bytes | BeautifulSoup, src_lang: str="auto", target_lang: str="en", 
                   cache: bool=True, is_markup: bool=False, **kwargs) -> str | bytes:
         '''
-        Translate `content` from `src_lang` to `target_lang` using `self.translator`.
+        Translate `content` from `src_lang` to `target_lang`.
 
         Returns translated content.
 
@@ -217,7 +217,7 @@ class Translator:
     
     def translate_text(self, text: str, src_lang: str="auto", target_lang: str="en", cache: bool=True, **kwargs) -> str:
         '''
-        Translate text from `src_lang` to `target_lang` using `self.translator`.
+        Translate text from `src_lang` to `target_lang`.
 
         Returns translated text.
 
@@ -310,7 +310,7 @@ class Translator:
     # NOT FUNCTIONAL FOR NOW
     # def translate_markup(self, markup: str | bytes, src_lang: str="auto", target_lang: str="en", **kwargs):
     #     '''
-    #     Translates the markup content from `src_lang` to `target_lang` using `self.translator`.
+    #     Translates the markup content from `src_lang` to `target_lang`.
 
     #     ### NOT FUNCTIONAL FOR NOW. CONVERT markup TO BEAUTIFULSOUP OBJECT AND USE THE `translate_soup` METHOD INSTEAD.
 
@@ -358,7 +358,7 @@ class Translator:
 
     def translate_file(self, filepath: str, src_lang: str="auto", target_lang: str="en", **kwargs):
         '''
-        Translates file from `src_lang` to `target_lang` using `self.translator`.
+        Translates file from `src_lang` to `target_lang`.
 
         Returns translated file's FileHandler`.
 

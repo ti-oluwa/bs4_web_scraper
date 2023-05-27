@@ -83,9 +83,7 @@ params = {
     "scrape_session_pause_duration": 20, # pause duration in seconds. It is advisable to leave this at its default, "auto".
     "max_no_of_retries": 5,
     "base_storage_dir": "./scraped_data",
-    "storage_path": ".",
-    "translation_engine": "bing",
-    
+    "storage_path": ".",    
 }
 
 bs4_scraper = BS4WebScraper(**params)
@@ -123,12 +121,9 @@ To translate the scraped data, set the `translate_to` parameter to the language 
 
 ```python
 
-# Scraping a web page and translating the scraped data to French (during instantiation)
-bs4_scraper = BS4WebScraper(..., translation_engine="bing")
-# or (after instantiation)
-bs4_scraper.translation_engine = "bing"
-
-bs4_scraper.scrape(url="https://www.google.com", scrape_depth=0, translate_to="fr")
+# Scraping a web page and translating the scraped data to French
+bs4_scraper = BS4WebScraper(...)
+bs4_scraper.scrape(url="https://www.google.com", scrape_depth=0, translate_to="fr", translation_engine='google')
 
 ```
 
@@ -258,8 +253,10 @@ The `download_url` method is used to download files from a web page or url. The 
 ```python
 
 # Downloading a file from a web page
-bs4_scraper.download_url(url="https://www.example.com/download/example.mkv", save_as="example.mkv", save_to="downloads")
+file_handler = bs4_scraper.download_url(url="https://www.example.com/download/example.mkv", save_as="example.mkv", save_to="downloads")
 
+# Returns FileHandler Object for the downloaded file
+print(file_handler.filename)
 ```
 
 #### `download_urls`
@@ -342,7 +339,7 @@ print(links)
 
 ```
 
-**  All `find_*` methods have the same usage as the `find_links` method. For example, the `find_stylesheets` method is used to get the `href` on all `link` element with a `rel` attribute of `stylesheet`. A simple example usage is shown below:**
+**All `find_*` methods have the same usage as the `find_links` method. For example, the `find_stylesheets` method is used to get the `href` on all `link` element with a `rel` attribute of `stylesheet`. A simple example usage is shown below:**
 
 ```python
 
