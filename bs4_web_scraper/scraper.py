@@ -12,6 +12,7 @@ import re
 from typing import (AnyStr, Dict, List, Tuple)
 from collections.abc import Iterable
 import time
+from bs4 import Comment
 from concurrent.futures import ThreadPoolExecutor
 from urllib3.util.url import parse_url
 
@@ -342,7 +343,7 @@ class BS4WebScraper(BS4BaseScraper):
         Returns a list of the markup elements with the target name as bs4.element.Tag objects.
 
         Args::
-            * url (str): url of page to be parsed and scanned for target element.
+            * url (str): url of page to be parsed and scanned for target elements.
             * target (str): name of markup element (with a url related attribute).
             * attrs (Dict[str, str] | Iterable[Dict[str, str]]): A dictionary or list of dictionaries of filters on attribute values.
             * depth (int): Number of levels to recursively search for target items. Defaults to 0.
@@ -352,8 +353,8 @@ class BS4WebScraper(BS4BaseScraper):
         self.set_base_url(url)
         base_url_obj = parse_url(self.base_url)
         soup = self.make_soup_from_url(url)
+        tags = []
         if soup is not None:
-            tags = []
             if isinstance(attrs, Iterable) and not isinstance(attrs, dict):
                 for attr in attrs:
                     tags.extend(soup.find_all(target, attr, recursive=recursive, limit=count))
@@ -369,12 +370,80 @@ class BS4WebScraper(BS4BaseScraper):
                 links = [ link_obj[0] for link_obj in link_objs if (base_url_obj.netloc and link_obj[1].netloc) and (base_url_obj.netloc in link_obj[1].netloc) ] 
 
                 with ThreadPoolExecutor() as executor:
-                    results = executor.map(lambda args: self.find_urls_tags(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
+                    results = executor.map(lambda args: self.find_all_tags(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
                     for result in results:
                         if result:
                             tags.extend(result)
                 continue
         return tags
+
+
+    def find_tags_by_id(self, url: str, id: str, depth: int = 0, count: int = None, recursive: bool = True):
+        """
+        Gets all markup elements with the target id in specified url.
+
+        Returns a list of the markup elements with the target id as bs4.element.Tag objects.
+
+        Args::
+            * url (str): url of page to be parsed and scanned for target elements.
+            * id (str): id of markup element(s).
+            * depth (int): Number of levels to recursively search for target items. Defaults to 0.
+            * count (int): Number of target items to be found on a url page before stopping.
+            * recursive (bool): Performs a recursive search of url page's children
+        """
+        return self.find_all_tags(url, target=None, attrs={"id": id}, depth=depth, count=count, recursive=recursive)
+
+
+    def find_tags_by_class(self, url: str, class_: str, depth: int = 0, count: int = None, recursive: bool = True):
+        """
+        Gets all markup elements with the target class name in specified url.
+
+        Returns a list of the markup elements with the target name as bs4.element.Tag objects.
+
+        Args::
+            * url (str): url of page to be parsed and scanned for target elements.
+            * class (str): class name of markup elements.
+            * depth (int): Number of levels to recursively search for target items. Defaults to 0.
+            * count (int): Number of target items to be found on a url page before stopping.
+            * recursive (bool): Performs a recursive search of url page's children
+        """
+        return self.find_all_tags(url, target=None, attrs={"class": class_}, depth=depth, count=count, recursive=recursive)
+
+
+    def find_comments(self, url: str, depth: int = 0, count: int = None, recursive: bool = True):
+        """
+        Gets all comments in specified url.
+
+        Returns a list of the comments as bs4.element.Comment objects.
+
+        Args::
+            * url (str): url of page to be parsed and scanned for target elements.
+            * depth (int): Number of levels to recursively search for target items. Defaults to 0.
+            * count (int): Number of target items to be found on a url page before stopping.
+            * recursive (bool): Performs a recursive search of url page's children
+        """
+        self.set_base_url(url)
+        base_url_obj = parse_url(self.base_url)
+        soup = self.make_soup_from_url(url)
+        comments = []
+        if soup is not None:
+            comments = soup.find_all(text=lambda text: isinstance(text, Comment), limit=count, recursive=recursive)
+
+            while depth > 0:
+                depth -= 1
+                link_tags = soup.find_all('a', recursive=recursive)
+                links = [ self.get_link_tag(link_tag, download=False) for link_tag in link_tags ]
+                links = filter(lambda link: bool(link), links)   
+                link_objs = [ (link, parse_url(link)) for link in links ]
+                links = [ link_obj[0] for link_obj in link_objs if (base_url_obj.netloc and link_obj[1].netloc) and (base_url_obj.netloc in link_obj[1].netloc) ] 
+
+                with ThreadPoolExecutor() as executor:
+                    results = executor.map(lambda args: self.find_comments(*args), map(lambda link: (link, depth, count, recursive), links))
+                    for result in results:
+                        if result:
+                            comments.extend(result)
+                continue
+        return comments
 
     
     def find_links(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "links.csv", **kwargs) -> List[str]:

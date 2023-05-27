@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bs4_web_scraper"
-version = "0.0.1a"
+version = "0.1.1"
 authors = [
   { name="ti-oluwa", email="tioluwa.dev@gmail.com" },
 ]

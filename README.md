@@ -207,6 +207,9 @@ The following are some useful methods for scraping web data using the scraper cl
 - `download_urls`
 - `find_urls`
 - `find_all_tags`
+- `find_tags_by_id`
+- `find_tags_by_class`
+- `find_comments`
 - `find_links`
 - `find_stylesheets`
 - `find_scripts`
