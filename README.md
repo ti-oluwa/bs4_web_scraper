@@ -2,6 +2,8 @@
 
 ### __A web scraper based on the BeautifulSoup4 library with translation capabilities.__
 
+[PyPI](https://pypi.org/project/bs4-web-scraper/)
+
 
 ## Dependencies
 
@@ -42,6 +44,18 @@
 ## Usage
 
 Before using the scraper, make sure you have an internet connection. The scraper uses the internet to scrape web pages and translate scraped data.
+
+**NOTE:**
+
+* The scraper is not a browser. It does not execute JavaScript. It only scrapes the HTML content of web pages.
+* The scraper requires an internet connection to scrape web pages and translate scraped data.
+* The scraper was built with HTML5 web pages in mind. It may not work well with older HTML versions.
+* Some web pages may not be scraped properly due to the way they are structured. This is not a bug. It is a limitation of the scraper.
+* The scraper only attempts to authenticate with the information provided. The success of the authentication largely depends on the information provided to the scraper. This is because the authentication process varies from website to website. It is up to the user to provide the correct authentication information.
+* The scraper does not support authentication with CAPTCHA.
+* The scraper does not support scraping dynamic web pages by default.
+* Some methods of the scraper may not work properly if the scraper is not instantiated properly. Ensure to read the docstrings of the methods and class attributes before using them.
+* A number of methods of the scraper use multithreading. This means that the scraper can run multiple threads at the same time. This is done to speed up the scraping process. The number of threads used by the scraper can be set by the user but it is advisable to leave it at its default value.
 
 ### Importing the module
 
@@ -90,7 +104,7 @@ To read more about the instantiation parameters and class attributes, run the fo
 
 ### Scraping a web page
 
-Most web scraping tasks can be done using the `scrape` method. Below is an example of how to scrape a web site.
+Let's say you want to download a website/page to your local machine along with its dependencies(like CSS files, scripts, images or fonts), the `scrape` method can be used. Below is an example of how to scrape a web site.
 
 ```python
 
@@ -152,6 +166,10 @@ credentials = {
     'auth_password_field': 'passwordfieldname',
     'auth_username': 'yourusername',
     'auth_password': 'yourpassword',
+    'additional_auth_fields': {
+        'fieldname': 'fieldvalue',
+        'fieldname': 'fieldvalue',
+    }
 }
 
 bs4_scraper.scrape(url="https://www.websitewithauth.com", scrape_depth=0, credentials=credentials)
@@ -174,7 +192,7 @@ bs4_scraper.download_url(url="https://www.websitewithauth.com/download/example.m
 
 ```
 
-NOTE: `credentials` should always take the form of a dictionary with the following keys: `auth_url`, `auth_username_field`, `auth_password_field`, `auth_username`, `auth_password`.
+NOTE: `credentials` should always take the form of a dictionary with the following keys: `auth_url`, `auth_username_field`, `auth_password_field`, `auth_username`, `auth_password`, `additional_auth_fields`. The `additional_auth_fields` key is optional. It is used to pass additional authentication fields that may be required by the website or page.
 
 To get a quick template for the `credentials` dictionary, do:
 
@@ -186,7 +204,7 @@ print(bs4_web_scraper.credentials_template)
 
 ```
 
-### Other useful methods
+### Other useful scraper methods
 
 The following are some useful methods for scraping web data using the scraper class.
 
@@ -228,6 +246,66 @@ from bs4_web_scraper.<module_name> import <class_name>
 >>> help(<class_name>)
 
 ```
+
+
+### Scraper Methods
+
+#### `download_url`
+
+The `download_url` method is used to download files from a web page or url. The following example shows how to download a file from a web page. A simple example usage is shown below:
+
+```python
+
+# Downloading a file from a web page
+bs4_scraper.download_url(url="https://www.example.com/download/example.mkv", save_as="example.mkv", save_to="downloads")
+
+```
+
+#### `download_urls`
+
+The `download_urls` method is used to download multiple files from multiple web pages or urls. The following example shows how to download multiple files from a web page. A simple example usage is shown below:
+
+```python
+
+# Downloading multiple files
+urls = [
+    "https://www.example.com/download/example1.mkv",
+    "https://www.example.com/download/example2.mkv",
+    "https://www.example.com/download/example3.mkv",
+    "https://www.example.com/download/example4.mkv",
+    "https://www.example.com/download/example5.mkv",
+]
+
+bs4_scraper.download_urls(urls=urls, save_to="downloads")
+
+```
+The define what each file should be saved as, you can pass the `save_as` alongside the url as a dictionary - `urls` becomes a list of dictionaries, as parameter to the `download_urls` method. The following example shows how to download multiple files from a web page and save them with different names
+
+```python
+
+urls = [
+    {
+        "url": "https://www.example.com/download/example1.mkv",
+        "save_as": "example1.mkv"
+    },
+    {
+        "url": "https://www.example.com/download/example2.mkv",
+        "save_as": "example2.mkv"
+    },
+    {
+        "url": "https://www.example.com/download/example3.mkv",
+        "save_as": "example3.mkv"
+    },
+]
+
+bs4_scraper.download_urls(urls=urls, save_to="downloads")
+
+```
+
+#### `find_all`
+
+
+
 
 ### Credits
 
