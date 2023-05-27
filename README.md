@@ -26,7 +26,7 @@
 ## Installation
 
 1. Make sure you have python3 installed on your local machine.
-2. Run pip install `bs4-web-scraper`.
+2. Run `pip install bs4-web-scraper` on terminal.
 3. Import the module into your project and you're good to go.
 
 
