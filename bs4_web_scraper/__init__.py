@@ -58,6 +58,9 @@ credentials_template = {
     'auth_password_field': '<Password Field>',
     'auth_username': '<Username>',
     'auth_password': '<Password>',
+    'additional_auth_fields': {
+        '<Field Name>': '<Field Value>',
+    },
 }
 
 

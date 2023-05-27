@@ -55,10 +55,10 @@ class Logger:
     
     def __setattr__(self, __name: str, __value: Any) -> None:
         super().__setattr__(__name, __value)
-        self.__update_config()
+        self._update_config()
 
     
-    def __to_console(self) -> None:
+    def _to_console(self) -> None:
         '''
         Logs messages to the console.
 
@@ -77,14 +77,14 @@ class Logger:
         self._logger.addHandler(console)
 
 
-    def __update_config(self) -> None:
+    def _update_config(self) -> None:
         '''Updates the logger's configuration.'''
         logging.basicConfig(filename=self.filename, level=self._base_level, 
                             format=self._format, datefmt=self.date_format,
                             filemode=self.file_mode, force=True)
         if self.to_console:
             try:
-                self.__to_console()
+                self._to_console()
             except Exception as e:
                 self.log_error(e)
         return None

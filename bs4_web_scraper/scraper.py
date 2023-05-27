@@ -245,18 +245,18 @@ class BS4WebScraper(BS4BaseScraper):
         return results
 
 
-    def save_results(self, result: Iterable[str], path: str, **kwargs):
+    def save_results(self, result: Iterable[str], file_path: str, **kwargs):
         '''
-        Saves a list of results to the file in the given path inside the base storage directory
+        Saves a list of results to the file in the given file inside the base storage directory(if path is not an absolute path)
 
         Args::
             * result (Iterable[str]): An iterable containing strings to be saved.
-            * path (str): path to directory where the file containing `result` will be saved in the base storage directory.
+            * file_path (str): path to directory where the file containing `result` will be saved in the base storage directory.
             If it is an absolute path, the file will be saved in the specified path.
             * **kwargs (Dict | optional): optional parameters to be used when necessary
                     * `csv_head` (str): heading for csv file type
         '''
-        path = os.path.join(self.base_storage_dir, path)
+        path = os.path.join(self.base_storage_dir, file_path)
         file_handler = FileHandler(path)  
         if file_handler.filetype == 'csv':
             csv_head = kwargs.get('csv_head', "results").upper()
@@ -269,7 +269,7 @@ class BS4WebScraper(BS4BaseScraper):
         return None
 
 
-    def find_all(self, url: str, target: str, attrs: Dict[str, str] | Iterable[Dict[str, str]] = {}, 
+    def find_urls(self, url: str, target: str, attrs: Dict[str, str] | Iterable[Dict[str, str]] = {}, 
                         depth: int = 0, count: int = None, recursive: bool = True):
         """
         Parses out the url/links on all elements with the target name in specified url.
@@ -312,7 +312,7 @@ class BS4WebScraper(BS4BaseScraper):
                 links = [ link_obj[0] for link_obj in link_objs if (base_url_obj.netloc and link_obj[1].netloc) and (base_url_obj.netloc in link_obj[1].netloc) ] 
 
                 with ThreadPoolExecutor() as executor:
-                    results = executor.map(lambda args: self.find_all(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
+                    results = executor.map(lambda args: self.find_urls(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
                     for result in results:
                         if result:
                             urls.extend(result)
@@ -356,7 +356,7 @@ class BS4WebScraper(BS4BaseScraper):
                 links = [ link_obj[0] for link_obj in link_objs if (base_url_obj.netloc and link_obj[1].netloc) and (base_url_obj.netloc in link_obj[1].netloc) ] 
 
                 with ThreadPoolExecutor() as executor:
-                    results = executor.map(lambda args: self.find_all_tags(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
+                    results = executor.map(lambda args: self.find_urls_tags(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
                     for result in results:
                         if result:
                             tags.extend(result)
@@ -380,7 +380,7 @@ class BS4WebScraper(BS4BaseScraper):
             * **kwargs (Dict | optional): optional parameters to be used for 
                     * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.find_all(url, target='a', depth=depth)
+        result = self.find_urls(url, target='a', depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Links')
             self.save_results(result, file_path, **kwargs)
@@ -407,7 +407,7 @@ class BS4WebScraper(BS4BaseScraper):
             {'rel': 'stylesheet'},
             {'type': 'text/css'}
         )
-        result = self.find_all(url, target='link', attrs=attrs, depth=depth)
+        result = self.find_urls(url, target='link', attrs=attrs, depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Stylesheets')
             self.save_results(result, file_path, **kwargs)
@@ -430,7 +430,7 @@ class BS4WebScraper(BS4BaseScraper):
             * `**kwargs` (Dict | optional): optional parameters to be used for 
                     * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.find_all(url, target='script', depth=depth)
+        result = self.find_urls(url, target='script', depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Scripts')
             self.save_results(result, file_path, **kwargs)
@@ -457,7 +457,7 @@ class BS4WebScraper(BS4BaseScraper):
             {'rel': 'preload'},
             {'as': 'font'}
         )
-        result = self.find_all(url, target='link', attrs=attrs, depth=depth)
+        result = self.find_urls(url, target='link', attrs=attrs, depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Font Links')
             self.save_results(result, file_path, **kwargs)
@@ -480,7 +480,7 @@ class BS4WebScraper(BS4BaseScraper):
             * **kwargs (Dict | optional): optional parameters to be used for 
                     * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.find_all(url, target='img', depth=depth)
+        result = self.find_urls(url, target='img', depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Image Links')
             self.save_results(result, file_path, **kwargs)
@@ -505,7 +505,7 @@ class BS4WebScraper(BS4BaseScraper):
         """
         video_types = ('video/mp4', 'video/mpeg', 'video/ogg', 'video/webm', 'video/3gpp', 'video/quicktime')
         v_list = [ {'type': v} for v in video_types ]
-        result = self.find_all(url, target='source', attrs=v_list, depth=depth)
+        result = self.find_urls(url, target='source', attrs=v_list, depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Video Links')
             self.save_results(result, file_path, **kwargs)
@@ -530,14 +530,14 @@ class BS4WebScraper(BS4BaseScraper):
         '''
         audio_types = ('audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/wav', 'audio/aac', 'audio/flac', 'audio/m4a', 'audio/wma')
         a_list = [ {'type': a} for a in audio_types ]
-        result = self.find_all(url, target='source', attrs=a_list, depth=depth)
+        result = self.find_urls(url, target='source', attrs=a_list, depth=depth)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Audio Links')
             self.save_results(result, file_path, **kwargs)
         return result
         
 
-    def get_emails(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "emails.csv", **kwargs) -> List[str]:
+    def find_emails(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "emails.csv", **kwargs) -> List[str]:
         """
         Searches for and returns a list of emails found in the given url.
 

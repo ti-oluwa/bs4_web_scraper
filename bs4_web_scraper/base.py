@@ -266,15 +266,18 @@ class BS4BaseScraper:
         '''
         req_cr = (
             'auth_username_field', 'auth_password_field',
-            'auth_username', 'auth_password', 'auth_url'
+            'auth_username', 'auth_password', 'auth_url',
+            'additional_auth_fields',
         )
         for cr in req_cr:
             if not credentials.get(cr, None):
                 raise KeyError(f"`{cr}` not found in `credentials`")
 
         for key, value in credentials.items():
-            if not isinstance(value, str):
+            if key != 'additional_auth_fields' and not isinstance(value, str):
                 raise TypeError(f'Invalid type for `{key}`. `{key}` should be of type str')
+            if key == 'additional_auth_fields' and not isinstance(value, dict):
+                raise TypeError(f'Invalid type for `{key}`. `{key}` should be of type dict')
 
         auth_url_obj = parse_url(credentials.get("auth_url"))
         if not (auth_url_obj.host and auth_url_obj.scheme):
@@ -292,13 +295,18 @@ class BS4BaseScraper:
         Args:
             credentials (Dict[str, str]): Authentication credentials
         '''
+        self._auth_url = self._validate_auth_credentials(credentials)
+        self.set_base_url(self._auth_url)
+
         if not self.base_url:
             raise AttributeError("`self.base_url` must be set.")
 
-        self._auth_url = self._validate_auth_credentials(credentials)
         _credentials = {}
         _credentials[credentials['auth_username_field']] = credentials['auth_username']
         _credentials[credentials['auth_password_field']] = credentials['auth_password']
+        if credentials.get('additional_auth_fields', None):
+            for key, value in credentials['additional_auth_fields'].items():
+                _credentials[key] = value
         self._auth_credentials = _credentials
         return None
 
@@ -467,10 +475,11 @@ class BS4BaseScraper:
             self.set_auth_credentials(credentials)
 
         self.log(f'AUTHENTICATING AT... --> {self.auth_url}\n')
-        resp = self.session.get(url=self.auth_url) 
+        headers = self.get_request_headers()
+        resp = self.session.get(url=self.auth_url, headers=headers)
         # get and set csrftoken
         self._auth_credentials['csrfmiddlewaretoken'] = resp.cookies.get('csrftoken')
-        resp = self.session.post(url=self.auth_url, data=self.auth_credentials)
+        resp = self.session.post(url=self.auth_url, data=self.auth_credentials, headers=headers)
         self._is_authenticated = resp.ok
 
         if self.is_authenticated:

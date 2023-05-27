@@ -2,6 +2,8 @@
 
 ### __A web scraper based on the BeautifulSoup4 library with translation capabilities.__
 
+[View Project on PyPI](https://pypi.org/project/bs4-web-scraper/)
+
 
 ## Dependencies
 
@@ -42,6 +44,18 @@
 ## Usage
 
 Before using the scraper, make sure you have an internet connection. The scraper uses the internet to scrape web pages and translate scraped data.
+
+**NOTE:**
+
+* The scraper is not a browser. It does not execute JavaScript. It only scrapes the HTML content of web pages.
+* The scraper requires an internet connection to scrape web pages and translate scraped data.
+* The scraper was built with HTML5 web pages in mind. It may not work well with older HTML versions.
+* Some web pages may not be scraped properly due to the way they are structured. This is not a bug. It is a limitation of the scraper.
+* The scraper only attempts to authenticate with the information provided. The success of the authentication largely depends on the information provided to the scraper. This is because the authentication process varies from website to website. It is up to the user to provide the correct authentication information.
+* The scraper does not support authentication with CAPTCHA.
+* The scraper does not support scraping dynamic web pages by default.
+* Some methods of the scraper may not work properly if the scraper is not instantiated properly. Ensure to read the docstrings of the methods and class attributes before using them.
+* A number of methods of the scraper use multithreading. This means that the scraper can run multiple threads at the same time. This is done to speed up the scraping process. The number of threads used by the scraper can be set by the user but it is advisable to leave it at its default value.
 
 ### Importing the module
 
@@ -90,7 +104,7 @@ To read more about the instantiation parameters and class attributes, run the fo
 
 ### Scraping a web page
 
-Most web scraping tasks can be done using the `scrape` method. Below is an example of how to scrape a web site.
+Let's say you want to download a website/page to your local machine along with its dependencies(like CSS files, scripts, images or fonts), the `scrape` method can be used. Below is an example of how to scrape a web site.
 
 ```python
 
@@ -152,6 +166,10 @@ credentials = {
     'auth_password_field': 'passwordfieldname',
     'auth_username': 'yourusername',
     'auth_password': 'yourpassword',
+    'additional_auth_fields': {
+        'fieldname': 'fieldvalue',
+        'fieldname': 'fieldvalue',
+    }
 }
 
 bs4_scraper.scrape(url="https://www.websitewithauth.com", scrape_depth=0, credentials=credentials)
@@ -174,7 +192,7 @@ bs4_scraper.download_url(url="https://www.websitewithauth.com/download/example.m
 
 ```
 
-NOTE: `credentials` should always take the form of a dictionary with the following keys: `auth_url`, `auth_username_field`, `auth_password_field`, `auth_username`, `auth_password`.
+NOTE: `credentials` should always take the form of a dictionary with the following keys: `auth_url`, `auth_username_field`, `auth_password_field`, `auth_username`, `auth_password`, `additional_auth_fields`. The `additional_auth_fields` key is optional. It is used to pass additional authentication fields that may be required by the website or page.
 
 To get a quick template for the `credentials` dictionary, do:
 
@@ -186,13 +204,13 @@ print(bs4_web_scraper.credentials_template)
 
 ```
 
-### Other useful methods
+### Other useful scraper methods
 
 The following are some useful methods for scraping web data using the scraper class.
 
 - `download_url`
 - `download_urls`
-- `find_all`
+- `find_urls`
 - `find_all_tags`
 - `find_links`
 - `find_stylesheets`
@@ -228,6 +246,250 @@ from bs4_web_scraper.<module_name> import <class_name>
 >>> help(<class_name>)
 
 ```
+
+### Scraper Methods
+
+**Before proceeding, it is important to know what an 'rra' means. 'rra' stands for 'resource related attribute'. A resource related attribute is an attribute that is related to a file(resource) that the webpage is dependent on. For example, the `href` attribute of an `a` tag is a resource related attribute because it is related to the resource (link) that the `a` tag points to. The `src` attribute of an `img` tag is also a resource related attribute because it is related to the resource (image) that the `img` tag points to.**
+
+#### `download_url`
+
+The `download_url` method is used to download files from a web page or url. The following example shows how to download a file from a web page. A simple example usage is shown below:
+
+```python
+
+# Downloading a file from a web page
+bs4_scraper.download_url(url="https://www.example.com/download/example.mkv", save_as="example.mkv", save_to="downloads")
+
+```
+
+#### `download_urls`
+
+The `download_urls` method is used to download multiple files from multiple web pages or urls. The following example shows how to download multiple files from a web page. A simple example usage is shown below:
+
+```python
+
+# Downloading multiple files
+urls = [
+    "https://www.example.com/download/example1.mkv",
+    "https://www.example.com/download/example2.mkv",
+    "https://www.example.com/download/example3.mkv",
+    "https://www.example.com/download/example4.mkv",
+    "https://www.example.com/download/example5.mkv",
+]
+
+bs4_scraper.download_urls(urls=urls, save_to="downloads")
+
+```
+The define what each file should be saved as, you can pass the `save_as` alongside the url as a dictionary - `urls` becomes a list of dictionaries, as parameter to the `download_urls` method. The following example shows how to download multiple files from a web page and save them with different names
+
+```python
+
+urls = [
+    {
+        "url": "https://www.example.com/download/example1.mkv",
+        "save_as": "example1.mkv"
+    },
+    {
+        "url": "https://www.example.com/download/example2.mkv",
+        "save_as": "example2.mkv"
+    },
+    {
+        "url": "https://www.example.com/download/example3.mkv",
+        "save_as": "example3.mkv"
+    },
+]
+
+bs4_scraper.download_urls(urls=urls, save_to="downloads")
+
+```
+
+#### `find_urls`
+
+This method is used to get all resource related attribute(url or link) on elements that match a given tag name. This method only works for tags that have the `src` or `href` attribute. The following example shows how to find all urls on the `img` elements in a web page:
+
+```python
+# Finding all urls on the img elements on a web page with a class of 'sub-image', saving them to a file and downloading them
+
+img_urls = bs4_scraper.find_urls(url='https://example.com/',target="img", attrs={"class": "sub-image"})
+# save the urls to a file using the save_results method
+bs4_scraper.save_results(results=img_urls, file_path="downloads/img_urls.txt")
+# download the urls using the download_urls method
+bs4_scraper.download_urls(urls=img_urls, save_to="downloads")
+
+```
+
+#### `find_all_tags`
+
+This method is used to get all elements that match a given tag name. A simple example usage is shown below:
+
+```python
+
+# Finding all small elements from a url going two levels deep
+small_elements = bs4_scraper.find_all_tags(url='https://example.com/',target="small", depth=2)
+print(small_elements)
+
+```
+
+#### `find_links`
+
+This method is used to get the `href` on all `a` element. A simple example usage is shown below:
+
+```python
+
+# Finding all links on a web page
+links = bs4_scraper.find_links(url='https://example.com/')
+print(links)
+
+```
+
+**  All `find_*` methods have the same usage as the `find_links` method. For example, the `find_stylesheets` method is used to get the `href` on all `link` element with a `rel` attribute of `stylesheet`. A simple example usage is shown below:**
+
+```python
+
+# Finding all stylesheets on a web page
+stylesheets = bs4_scraper.find_stylesheets(url='https://example.com/')
+print(stylesheets)
+
+```
+
+#### `find_pattern`
+
+This method is used to find all elements that match a given REGEX pattern. A simple example usage is shown below:
+
+```python
+
+# Finding all elements that match a email REGEX pattern
+pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+emails = bs4_scraper.find_pattern(url='https://example.com/', regex=pattern)
+print(emails)
+
+```
+
+### Utility Classes
+
+#### `Translator`
+
+This class is simply used to translate text, a file or soup from one language to another. The following example shows how to translate text from English to Yoruba:
+
+```python
+from bs4_web_scraper.translate import Translator
+
+# Translating text from English to Yoruba
+translator = Translator(translation_engine="google")
+translated_text = translator.translate(content="Hello World", src_lang="en", target_lang="yo")
+print(translated_text)
+
+# If content is markup
+translated_text = translator.translate(content="<p>Hello World</p>", src_lang="en", target_lang="yo", is_markup=True)
+print(translated_text)
+
+```
+
+To translate a file, you can pass the file path to the `translate` method as shown below:
+
+```python
+
+# Translating a file from English to Yoruba
+translator = Translator(translation_engine="google")
+translated_file_handler = translator.translate_file(file_path="path/to/file.txt", src_lang="en", target_lang="yo")
+print(translated_file_handler.file_content)
+
+```
+
+To translate a soup object, you can pass the soup object to the `translate` method as shown below:
+
+```python
+
+# Translating a soup object from English to Yoruba
+translator = Translator(translation_engine="google")
+translated_soup = translator.translate(content=soup, src_lang="en", target_lang="yo")
+
+```
+For specificity, you can use the `translate_text`, `translate_markup` or `translate_soup` methods to translate text, markup or a soup respectively. 
+
+
+#### `FileHandler`
+
+The `FileHandler` class is used to handle files and perform basic read-write operations on supported file types.
+
+**Example Usage**
+
+```python
+from bs4_web_scraper.file_handler import FileHandler
+
+# Instantiating a FileHandler object
+file_handler = FileHandler(file_path="path/to/file.txt")
+
+# Opening the file
+file_handler.open_file()
+
+# Closing the file
+file_handler.close_file()
+
+# Reading the file
+file_content = file_handler.read_file(read_mode='r')
+print(file_content)
+
+# Writing to the file
+file_handler.write_to_file(content="Hello World", write_mode='w')
+
+# Appending to the file
+file_handler.write_to_file(content="Hello World", write_mode='a')
+
+# Copying the file
+file_handler.copy_to(destination="path/to/copy.txt")
+
+# Moving the file
+file_handler.move_to(destination="path/to/move.txt")
+
+# Clearing the file content
+file_handler.clear_file()
+
+# Deleting the file
+file_handler.delete_file()
+
+# Getting the file type
+file_type = file_handler.filetype
+print(file_type)
+
+# Getting the file name
+file_name = file_handler.name
+print(file_name)
+
+# Getting the file path
+file_path = file_handler.filepath
+print(file_path)
+
+```
+
+
+#### `Logger`
+
+This class is used to log messages to a file and/or console. The following example shows how to log messages to a file:
+
+```python
+from bs4_web_scraper.logging import Logger
+
+# Instantiating a Logger object
+logger = Logger(name="example_logger", log_filepath="path/to/log.txt")
+
+# To log the message to the console also
+logger.to_console = True
+
+# Set the log level
+logger.set_base_level(level="DEBUG")
+
+# Log a message
+logger.log(message="Hello World") # Default log level is INFO
+
+# Log a message with a specific log level
+logger.log(message="Hello World", level="DEBUG")
+
+```
+The base log level can be set to any of the following: `DEBUG`, `INFO`, `WARNING`, `ERROR` or `CRITICAL`. The default log level is `NOTSET`. The `to_console` attribute is set to `False` by default. To log messages to the console, set the `to_console` attribute to `True` as shown in the example above. You cannot log at levels below the base log level. For example, if the base log level is set to `INFO`, you cannot log at `DEBUG` level.
+
+
+
 
 ### Credits
 
