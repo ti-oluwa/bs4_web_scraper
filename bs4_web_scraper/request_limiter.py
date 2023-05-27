@@ -113,9 +113,9 @@ class RequestLimitSetting:
         '''Disallows request making for the specified pause duration.'''
         self.requests_paused = True
         self._log("REQUESTS PAUSED \n")
-        self._log('------------------- \n')
+        self._log('=================== \n')
         self._log("WAITING... \n")
-        self._log('------------------- \n')
+        self._log('=================== \n')
         time.sleep(self.pause_duration)
         self.requests_paused = False
         self._log("REQUESTS RESTARTED \n")
