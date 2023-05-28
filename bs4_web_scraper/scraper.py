@@ -202,7 +202,7 @@ class BS4WebScraper(BS4BaseScraper):
         return None
 
     
-    def download_urls(self, urls: Iterable[Dict[str, str]], save_to: str | None = None, overwrite: bool = False,
+    def download_urls(self, urls: Iterable[Dict[str, str]] | Iterable[str], save_to: str | None = None, overwrite: bool = False,
                         check_ext: bool = True, fast_download: bool = False, unique_if_query_params: bool = False):
         '''
         Download files from the given urls using the `download_url` method. Saves the files in a storage path in `self.base_storage_dir`.
@@ -210,7 +210,7 @@ class BS4WebScraper(BS4BaseScraper):
         Returns the storage path of the downloaded files.
 
         Args:
-            - urls (List[Dict[str, str]]): List of urls to be downloaded. The url in the list should be of type dict[str, str].
+            - urls (Iterable[Dict[str, str]] | Iterable[str]): List of urls to be downloaded. The url in the list can be of type str or dict[str, str].
             - save_to Optional[str]: Path to the directory where the file should be saved in `self.base_storage_dir`.
             - overwrite (bool, optional): Whether to overwrite existing files. Defaults to False.
             - check_ext (bool, optional): Whether to check for extension in the url and use it for filename validation. Defaults to True.
@@ -221,15 +221,23 @@ class BS4WebScraper(BS4BaseScraper):
 
         #### Example Usage: ::
             >>> urls = [
-                    {'url': 'https://www.example.com/', 'save_as': 'site.html'},
-                    {'url': 'https://www.example.com/image2.jpg', 'save_as': ''},
-                    {'url': 'https://www.example.com/image3.jpg', 'save_as': 'image3.jpg'},
+                    {
+                        'url': 'https://www.example.com/', 
+                        'save_as': 'site.html',
+                    },
+                    'https://www.example.com/image2.jpg',
+                    {
+                        'url': 'https://www.example.com/image3.jpg', 
+                        'save_as': 'image3.jpg', 
+                        'save_to': './jpeg-downloads/',
+                    },
                 ]
             >>> bs4_scraper.download_urls(urls=urls, save_to='images', fast_download=True)
         ''' 
-
+        for index, url in enumerate(urls):
+            if isinstance(url, str):
+                urls[index] = {'url': url}
         urls = list(filter(lambda url: isinstance(url, dict) and any(url), urls))
-
         if len(urls) < 1:
             raise ValueError("No valid url was found in `urls`")
 
@@ -238,8 +246,7 @@ class BS4WebScraper(BS4BaseScraper):
             'save_to': save_to, 'overwrite': overwrite, 
             'check_ext': check_ext, 'unique_if_query_params': unique_if_query_params
         }
-        urls_download_params = map(lambda dict: {**params, **dict}, urls)
-
+        urls_download_params = list(map(lambda dict: {**params, **dict}, urls))
         if fast_download and len(urls) <= 200:
             self.log("FAST DOWNLOAD STARTED...\n")
             with ThreadPoolExecutor() as executor:
@@ -251,6 +258,10 @@ class BS4WebScraper(BS4BaseScraper):
             self.log("DOWNLOADS STARTED...")
             values = map(lambda kwargs: self.download_url(**kwargs), urls_download_params)
             results.extend(values)
+
+        else:
+            for kwargs in urls_download_params:
+                results.append(self.download_url(**kwargs))
 
         if results:
             self.log("DOWNLOADS FINISHED!\n")
