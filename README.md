@@ -277,29 +277,34 @@ urls = [
     "https://www.example.com/download/example5.mkv",
 ]
 
-bs4_scraper.download_urls(urls=urls, save_to="downloads")
+bs4_scraper.download_urls(urls=urls, save_to="downloads", fast_download=True)
 
 ```
-The define what each file should be saved as, you can pass the `save_as` alongside the url as a dictionary - `urls` becomes a list of dictionaries, as parameter to the `download_urls` method. The following example shows how to download multiple files from a web page and save them with different names
+To define what each file should be saved as, you can pass the `save_as` alongside the url as a dictionary - `urls` becomes a list of dictionaries, as parameter to the `download_urls` method. The following example shows how to download multiple files from a web page and save them with different names
 
 ```python
 
 urls = [
     {
         "url": "https://www.example.com/download/example1.mkv",
-        "save_as": "example1.mkv"
+        "save_as": "example_1.mkv"
     },
     {
         "url": "https://www.example.com/download/example2.mkv",
-        "save_as": "example2.mkv"
+        "save_as": "example_2.mkv"
     },
     {
         "url": "https://www.example.com/download/example3.mkv",
-        "save_as": "example3.mkv"
+        "save_as": "example_3.mkv",
+        "save_to": "./downloads2/" 
+        # This will be treated as an absolute path and will not be saved in `self.base_storage_dir`. 
+        # This file will be saved in its own directory(determined by the path given).
     },
+    # You can also add a normal string url. This will we saved as 'example4.mkv' by default.
+    "https://www.example.com/download/example4.mkv", 
 ]
 
-bs4_scraper.download_urls(urls=urls, save_to="downloads")
+bs4_scraper.download_urls(urls=urls, save_to="downloads", fast_download=True)
 
 ```
 

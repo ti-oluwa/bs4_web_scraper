@@ -3,6 +3,7 @@ DESCRIPTION: ::
     This module contains the BS4BaseScraper class which is the base class for creating scraper subclasses.
 """
 
+from os.path import isabs
 from typing import IO, Any, Dict, List
 import requests
 import os
@@ -592,7 +593,7 @@ class BS4BaseScraper:
                 else:
                     file_path = storage_path   
             else:
-                file_path = f"{self.base_storage_dir}\{storage_path}\{filename}"
+                file_path = os.path.normpath(f"{self.base_storage_dir}\{storage_path}\{filename}")
                 
             file_hdl = FileHandler(file_path, encoding, exists_ok=True, allow_any=True)
 
@@ -618,7 +619,8 @@ class BS4BaseScraper:
         '''
         url_path = url_obj.path or ''
         url_path = url_path.replace(remove_str, '') if remove_str else url_path
-        return url_path.replace('/', '\\')
+        path = os.path.normpath(url_path.replace('/', '\\'))
+        return path
 
 
     def get_rra_by_tag_name(self, tag_name: str) -> str | None:
@@ -643,14 +645,14 @@ class BS4BaseScraper:
     def download_url(self, url: str, save_as: str | None = None, save_to: str | None = None, overwrite: bool = False,
                         check_ext: bool = True, unique_if_query_params: bool = False):
         '''
-        Download file from the given url. Saves the file in a storage path in `self.base_storage_dir`.
+        Download file from the given url. Saves the file in a storage path in `self.base_storage_dir` if `save_to` is not an absolute path.
 
         Returns the FileHandler object for the downloaded file if downloaded or already existing else None.
 
         Args::
         * url (str): Url to be downloaded.
         * save_as Optional[str]: Name of the file to be downloaded or name with which the file should be saved.
-        * save_to Optional[str]: Path to the directory where the file should be saved in `self.base_storage_dir`.
+        * save_to Optional[str]: Absolute path or path to the directory where the file should be saved in `self.base_storage_dir`.
         * overwrite (bool, optional): Whether to overwrite the file if it already exists. Defaults to False.
         * check_ext (bool, optional): Whether to check for extension in the url and use it for filename validation. Defaults to True.
         * unique_if_query_params (bool, optional): Whether to add a unique string to the filename if the url has query parameters. Defaults to False.
@@ -693,14 +695,14 @@ class BS4BaseScraper:
             raise ValueError('`filename` seems to be empty. Please check the url "%s" or provide a `save_as` name.' % url)
 
         response = None
-        file_storage_path = save_to.replace('/', '\\').strip() if save_to is not None else save_to
-        # check if element src has query params
+        file_storage_path = save_to.replace('/', '\\').strip() if save_to else save_to
+        file_storage_path = os.path.abspath(file_storage_path) if file_storage_path and file_storage_path.startswith('.') else file_storage_path
+        # check if url has query params
         has_query_params = bool(url_obj.query)
         if file_storage_path is None:
-            file_storage_path = self.parse_storage_path_from_Url(url_obj, remove_str=f"{url_based_name}{url_based_ext}")
-            # Clean up storage path
-            file_storage_path = file_storage_path.removeprefix('\\').removesuffix('\\')        
-                
+            file_storage_path = self.parse_storage_path_from_Url(url_obj, remove_str=f"{url_based_name}{url_based_ext}")  
+            file_storage_path = file_storage_path.removeprefix('\\').removesuffix('\\')    
+   
         if has_query_params and (url_obj.query not in self.url_query_params.keys()):
             if unique_if_query_params is True:
                 filename = utils.generate_unique_filename(filename)
@@ -708,13 +710,19 @@ class BS4BaseScraper:
         if has_query_params and (url_obj.query in self.url_query_params.keys()):
             file_hdl: FileHandler = self.url_query_params[url_obj.query]
             return file_hdl
-            
+
         if not has_query_params or (url_obj.query not in self.url_query_params.keys()):
+            if os.path.isabs(file_storage_path):
+                full_path = f'{file_storage_path}/{filename}'
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            else:
+                full_path = f'{self.base_storage_dir}\{file_storage_path}\{filename}'
+            full_path = os.path.normpath(full_path)
             # check if file already exists
-            if os.path.exists(f'{self.base_storage_dir}\{file_storage_path}\{filename}') is False:
+            if os.path.exists(full_path) is False:
                 response = self.get(url_obj.url)
             else:
-                file_hdl = FileHandler(f'{self.base_storage_dir}\{file_storage_path}\{filename}', exists_ok=True, allow_any=True)
+                file_hdl = FileHandler(full_path, exists_ok=True, allow_any=True)
                 if overwrite is True:
                     file_hdl.delete_file()
                     response = self.get(url_obj.url)
