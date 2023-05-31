@@ -15,6 +15,10 @@ class FileHandler:
     """
     #### Handles basic read and write operations on supported file types.
 
+    NOTE:
+        On instantiation, the file object is opened in 'a+' mode and stored in the `file` attribute.
+        Remember to close the file object by calling the `close_file` method when done with the file.
+
     #### Supported File Types:
     .csv, .json, .txt, .html, .xml, .yml, .yaml, .js, .css, .md, .toml
     .doc, .docx, .pdf, .pickle, .pkl, .log, 'htm', 'xht', etc. Mostly text based file types.
@@ -53,13 +57,20 @@ class FileHandler:
         self.filepath = os.path.abspath(filepath)
         self.encoding = encoding
         self.allow_any = allow_any
+        
         if not os.path.exists(self.filepath):
             if not_found_ok is False:
                 raise FileNotFoundError(f"File not found: {self.filepath}")
             os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-            self.created_file = True
-        elif os.path.exists(self.filepath) and exists_ok is False:
-            raise FileExistsError(f"File already exist: {self.filepath}")
+            try:
+                open(self.filepath, 'x').close()
+                self.created_file = True
+                if not os.path.isfile(self.filepath):
+                    raise FileError(f"File not created: {self.filepath}. Check if the path points to a file.")
+            except FileExistsError and exists_ok is True:
+                pass
+            except FileExistsError and exists_ok is False:
+                raise FileExistsError(f"File already exist: {self.filepath}")
         # open file in append mode by default so it can be written into and read from 
         # even if the `open_file` method has not being called yet.
         self.open_file('a+')
@@ -67,6 +78,9 @@ class FileHandler:
 
     def __str__(self) -> str:
         return self.read_file()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close_file()
 
     @property
     def filetype(self) -> str:
@@ -165,6 +179,7 @@ class FileHandler:
         else:
             hdl = FileHandler(destination, encoding=self.encoding)
         hdl.write_to_file(self.read_file(), write_mode='w+')
+        self.close_file()
         return hdl
 
 

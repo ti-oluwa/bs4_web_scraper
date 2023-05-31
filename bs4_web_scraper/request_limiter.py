@@ -1,7 +1,7 @@
 import time
 from typing import Any
 
-from .logging import Logger
+from .logger import Logger
 
 
 

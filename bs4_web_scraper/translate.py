@@ -17,7 +17,7 @@ import translators as ts
 from translators.server import TranslatorsServer, tss
 
 from . import utils
-from .logging import Logger
+from .logger import Logger
 from .file_handler import FileHandler
 from .exceptions import TranslationError, UnsupportedLanguageError
 
