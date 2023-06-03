@@ -250,7 +250,7 @@ class BS4BaseScraper:
 
 
     def close_session(self):
-        """Closes the session assigned to `self._session` clearing all cookies in the process."""
+        """Closes the session assigned to `self._session` (usually re-assigning a new session after) clearing all cookies in the process."""
         if self._session:
             self._session.cookies.clear()
             return self._session.close()
@@ -428,7 +428,7 @@ class BS4BaseScraper:
             self.translate_to = translate_to
 
         if self.level_reached == 0:
-            self._base_url = self.get_base_url(url)
+            self.set_base_url(url)
         if credentials:
             self.set_auth_credentials(credentials)   
 
@@ -818,7 +818,7 @@ class BS4BaseScraper:
         if markup_file_handler.filetype not in ['xhtml', 'htm', 'shtml', 'html', 'xml']:
             raise FileError('Unsupported file type')
 
-        soup = self.make_soup(markup_file_handler.read_file())
+        soup = self.make_soup(markup_file_handler.read_file('rb'))
         markup_file_handler.close_file()
         tags = ResultSet(soup)
         for scrapable_tag in self._scrapable_tags:

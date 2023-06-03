@@ -32,9 +32,7 @@ urls = [
 ]
 
 
-
-class TestBS4BaseScraper(unittest.TestCase):
-    
+class BaseTestClassForBS4Scraper(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.scraper = BS4BaseScraper(base_storage_dir='./tests/results')
@@ -50,6 +48,9 @@ class TestBS4BaseScraper(unittest.TestCase):
         self.scraper.reset()
         self.markup_file.close()
 
+
+class TestBS4BaseScraper(BaseTestClassForBS4Scraper):
+    
     def test_get(self):
         response  = self.scraper.get(self.url)
         if response:

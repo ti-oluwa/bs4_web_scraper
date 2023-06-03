@@ -21,7 +21,7 @@ class FileHandler:
 
     #### Supported File Types:
     .csv, .json, .txt, .html, .xml, .yml, .yaml, .js, .css, .md, .toml
-    .doc, .docx, .pdf, .pickle, .pkl, .log, 'htm', 'xht', etc. Mostly text based file types.
+    .doc, .docx, .pdf, .pickle, .pkl, .log, '.htm', '.xht', '.xhtml', '.shtml' etc. Mostly text based file types.
 
     #### Parameters:
     @param str `filepath`: path to the file to be read or written to.
@@ -49,7 +49,7 @@ class FileHandler:
     USE THE `read_file` AND `write_to_file` METHODS TO READ AND WRITE TO THE FILE. PRIVATE METHODS ARE NOT GUARANTEED TO WORK.
     """
 
-    file: IO | None = None
+    _file: IO = None
     created_file: bool = False
 
     def __init__(self, filepath: str, encoding: str = 'utf-8', not_found_ok: bool = True, 
@@ -62,15 +62,14 @@ class FileHandler:
             if not_found_ok is False:
                 raise FileNotFoundError(f"File not found: {self.filepath}")
             os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-            try:
-                open(self.filepath, 'x').close()
-                self.created_file = True
-                if not os.path.isfile(self.filepath):
-                    raise FileError(f"File not created: {self.filepath}. Check if the path points to a file.")
-            except FileExistsError and exists_ok is True:
-                pass
-            except FileExistsError and exists_ok is False:
+            open(self.filepath, 'x').close()
+            self.created_file = True
+
+        else:
+            if exists_ok is False:
                 raise FileExistsError(f"File already exist: {self.filepath}")
+        if not os.path.isfile(self.filepath):
+            raise FileError(f"File not created: {self.filepath}. Check if the path points to a file.")
         # open file in append mode by default so it can be written into and read from 
         # even if the `open_file` method has not being called yet.
         self.open_file('a+')
@@ -83,6 +82,10 @@ class FileHandler:
         self.close_file()
 
     @property
+    def file(self):
+        return self._file
+
+    @property
     def filetype(self) -> str:
         filetype = os.path.splitext(self.filepath)[-1].removeprefix('.').lower()
         if filetype in ['yaml', 'yml']:
@@ -91,13 +94,11 @@ class FileHandler:
             filetype = 'pickle'
         return filetype
 
-    
     @property
     def filename(self) -> str:
         filename = self.filepath.replace(os.path.dirname(self.filepath), '')
         return filename.replace('\\', '')
     
-
     @property
     def file_content(self):
         return self.read_file('r')
@@ -125,9 +126,9 @@ class FileHandler:
             pass
         try:
             if 'b' in mode:
-                self.file = open(self.filepath, mode=mode)
+                self._file = open(self.filepath, mode=mode)
             else:
-                self.file = open(self.filepath, mode=mode, encoding=self.encoding)
+                self._file = open(self.filepath, mode=mode, encoding=self.encoding)
             return self.file
         except Exception as e:
             raise FileError(f"File cannot be opened. {e}")
@@ -137,13 +138,14 @@ class FileHandler:
         '''
         Closes the file.
         '''
-        self.file.close()
+        if self.file:
+         return self.file.close()
         return None
 
 
     def clear_file(self):
         """
-        Deletes file content.
+        Empties file.
 
         Returns the file open in the mode it was being used in before clearing was done.
         """
@@ -159,7 +161,9 @@ class FileHandler:
         '''Deletes the file.'''
         try:
             self.close_file()
-            return os.remove(self.filepath)
+            os.remove(self.filepath)
+            self._file = None
+            self.file_path = None
         except Exception as e:
             raise FileError(f"File could not be deleted. {e}")
 
@@ -196,7 +200,7 @@ class FileHandler:
         try:
             dst_hdl = self.copy_to(destination)
             self.delete_file()
-            self.file = dst_hdl.file
+            self._file = dst_hdl.file
             self.filepath = dst_hdl.filepath
             return None
         except Exception as e:
@@ -208,7 +212,7 @@ class FileHandler:
         Reads the file and returns the content using the specified `read_mode`.
 
         Args:
-            read_mode(str): The mode to be used to read the file. If None, it reads in 'read(r)' mode.
+            read_mode(str): The mode to be used to read the file. If None, it reads in 'read(r+)' mode.
         '''
         if read_mode and read_mode in ['w', 'wb', 'a', 'ab']:
             raise FileError(f"`{read_mode}` mode does not allow reading from file")
@@ -351,7 +355,8 @@ class FileHandler:
         Reads the file and returns the content.
         '''
         try:
-            return pickle.load(self.file, encoding=self.encoding)
+            self.open_file('rb+')
+            return pickle.load(self.file)
         except Exception as e:
             raise FileError(f'pickle file could not be loaded. {e}')
 
@@ -363,8 +368,10 @@ class FileHandler:
         Args:
             content (Any): The content to write to the file
         '''
-        pkl = pickle.dumps(content).decode(self.encoding)
-        self.file.write(pkl)
+        # pkl = pickle.dumps(content).decode(self.encoding)
+        # self.file.write(pkl)
+        self.open_file('ab+')
+        pickle.dump(content, self.file)
         return None
 
 

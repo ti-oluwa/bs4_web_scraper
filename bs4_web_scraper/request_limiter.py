@@ -81,7 +81,7 @@ class RequestLimitSetting:
         '''
             
         if self.logger and isinstance(self.logger, Logger):
-            self.logger.log(message, level)
+            return self.logger.log(message, level)
         elif self.logger and not isinstance(self.logger, Logger):
             raise TypeError('Invalid type for `self.logger`. `self.logger` should be an instance of bs4_web_scraper.logging.Logger')
         return print(message + '\n')        
