@@ -101,7 +101,9 @@ class FileHandler:
     
     @property
     def file_content(self):
-        return self.read_file('r')
+        content = self.read_file('r')
+        self.close_file()
+        return content
 
 
     @staticmethod
