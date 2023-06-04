@@ -1,0 +1,1 @@
+En Python, une fonction imbriquée est une fonction définie dans une autre fonction. Les fonctions imbriquées peuvent accéder aux variables et fonctions définies dans la fonction externe, mais la fonction externe ne peut pas accéder aux variables et fonctions définies dans la fonction imbriquée.

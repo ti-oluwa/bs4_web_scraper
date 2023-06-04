@@ -8,12 +8,14 @@ DESCRIPTION: ::
     websites you are scraping by making a donation.
 """
 import os
+from os.path import isabs
 import re
 from typing import (AnyStr, Dict, List, Tuple)
 from collections.abc import Iterable
 import time
-from bs4 import Comment
+from bs4 import Comment, Tag
 from concurrent.futures import ThreadPoolExecutor
+from bs4.element import ResultSet
 from urllib3.util.url import parse_url
 
 from . import utils
@@ -205,7 +207,8 @@ class BS4WebScraper(BS4BaseScraper):
     def download_urls(self, urls: Iterable[Dict[str, str]] | Iterable[str], save_to: str | None = None, overwrite: bool = False,
                         check_ext: bool = True, fast_download: bool = False, unique_if_query_params: bool = False):
         '''
-        Download files from the given urls using the `download_url` method. Saves the files in a storage path in `self.base_storage_dir`.
+        Download files from the given urls using the `download_url` method. Saves the files in a storage path in `self.base_storage_dir`
+        or in an absolute path as provided.
 
         Returns the storage path of the downloaded files.
 
@@ -295,7 +298,7 @@ class BS4WebScraper(BS4BaseScraper):
 
 
     def find_urls(self, url: str, target: str, attrs: Dict[str, str] | Iterable[Dict[str, str]] = {}, 
-                        depth: int = 0, count: int = None, recursive: bool = True):
+                        depth: int = 0, count: int = None, recursive: bool = True) -> List[str]:
         """
         Parses out the url/links on all elements with the target name in specified url.
         NOTE: This only works for elements with a resource(url) related attribute. To get markup elements with no resource related attribute, use `find_all_tags`.
@@ -312,23 +315,31 @@ class BS4WebScraper(BS4BaseScraper):
         """
         self.set_base_url(url)
         base_url_obj = parse_url(self.base_url)
-        urls = []
+        urls: List[str] = []
         soup = self.make_soup_from_url(url)
         if soup is not None:
-            tags = []
+            tags: ResultSet[Tag] = ResultSet(soup)
             rra = self.get_rra_by_tag_name(target)
             if isinstance(attrs, Iterable) and not isinstance(attrs, dict):
                 for attr in attrs:
-                    tags.extend(soup.find_all(target, attr, recursive=recursive, limit=count))
+                    tags.extend(soup.find_all(target, attr, recursive=recursive))
             else:
-                tags.extend(soup.find_all(target, attrs, recursive=recursive, limit=count))
+                tags = soup.find_all(target, attrs, recursive=recursive)
 
             tags = filter(lambda tag: bool(tag.get(rra)), tags)
             with ThreadPoolExecutor() as executor:
                 results = executor.map(lambda args: self.get_tag_rra(*args), map(lambda tag: (tag, False), tags))
+                results: List[str] = list(set(results))
+
+            if count != None:
+                urls.extend(results[:count])
+                count -= len(urls)
+            else:
                 urls.extend(results)
 
             while depth > 0:
+                if count is not None and count == 0:
+                    break
                 depth -= 1
                 link_tags = soup.find_all('a', recursive=recursive)
                 links = [ self.get_link_tag(link_tag, download=False) for link_tag in link_tags ]
@@ -336,18 +347,27 @@ class BS4WebScraper(BS4BaseScraper):
                 link_objs = [ (link, parse_url(link)) for link in links ]
                 links = [ link_obj[0] for link_obj in link_objs if (base_url_obj.netloc and link_obj[1].netloc) and (base_url_obj.netloc in link_obj[1].netloc) ] 
 
-                with ThreadPoolExecutor() as executor:
-                    results = executor.map(lambda args: self.find_urls(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
-                    for result in results:
-                        if result:
-                            urls.extend(result)
+                if count is None:
+                    # If count is not specified use threading
+                    with ThreadPoolExecutor() as executor:
+                        results = executor.map(lambda args: self.find_urls(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
+                        for result in results:
+                            if result and result not in urls:
+                                urls.extend(result)
+                else:
+                    for link in links:
+                        r = self.find_urls(link, target, attrs, depth, count, recursive)
+                        urls.extend(r[:count])
+                        count -= len(urls)
+                        if count == 0:
+                            break
+                        continue           
                 continue
-        urls = list(set(urls))
         return urls
     
 
     def find_all_tags(self, url: str, target: str, attrs: Dict[str, str] | Iterable[Dict[str, str]] = {},
-                        depth: int = 0, count: int = None, recursive: bool = True):
+                        depth: int = 0, count: int = None, recursive: bool = True) -> ResultSet[Tag]:
         """
         Gets all markup elements with the target name in specified url.
 
@@ -364,27 +384,44 @@ class BS4WebScraper(BS4BaseScraper):
         self.set_base_url(url)
         base_url_obj = parse_url(self.base_url)
         soup = self.make_soup_from_url(url)
-        tags = []
+        tags = ResultSet(soup)
         if soup is not None:
+            r = ResultSet(soup)
             if isinstance(attrs, Iterable) and not isinstance(attrs, dict):
                 for attr in attrs:
-                    tags.extend(soup.find_all(target, attr, recursive=recursive, limit=count))
+                    r.extend(soup.find_all(target, attr, recursive=recursive))
             else:
-                tags.extend(soup.find_all(target, attrs, recursive=recursive, limit=count))
+                r = soup.find_all(target, attrs, recursive=recursive)
+            if count is not None:
+                tags.extend(r[:count])
+                count -= len(tags)
+            else:
+                tags.extend(r)
 
             while depth > 0:
+                if count is not None and count == 0:
+                    break
                 depth -= 1
                 link_tags = soup.find_all('a', recursive=recursive)
                 links = [ self.get_link_tag(link_tag, download=False) for link_tag in link_tags ]
                 links = filter(lambda link: bool(link), links)   
                 link_objs = [ (link, parse_url(link)) for link in links ]
                 links = [ link_obj[0] for link_obj in link_objs if (base_url_obj.netloc and link_obj[1].netloc) and (base_url_obj.netloc in link_obj[1].netloc) ] 
-
-                with ThreadPoolExecutor() as executor:
-                    results = executor.map(lambda args: self.find_all_tags(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
-                    for result in results:
-                        if result:
-                            tags.extend(result)
+                if count is None:
+                    # If count is not specified use threading
+                    with ThreadPoolExecutor() as executor:
+                        results = executor.map(lambda args: self.find_all_tags(*args), map(lambda link: (link, target, attrs, depth, count, recursive), links))
+                        for result in results:
+                            if result:
+                                tags.extend(result)
+                else:
+                    for link in links:
+                        r = self.find_all_tags(link, target, attrs, depth, count, recursive)
+                        tags.extend(r[:count])
+                        count -= len(tags)
+                        if count == 0:
+                            break
+                        continue
                 continue
         return tags
 
@@ -393,7 +430,7 @@ class BS4WebScraper(BS4BaseScraper):
         """
         Gets all markup elements with the target id in specified url.
 
-        Returns a list of the markup elements with the target id as bs4.element.Tag objects.
+        Returns a list of the markup elements as  with the target id as bs4.element.Tag objects.
 
         Args::
             * url (str): url of page to be parsed and scanned for target elements.
@@ -436,23 +473,39 @@ class BS4WebScraper(BS4BaseScraper):
         self.set_base_url(url)
         base_url_obj = parse_url(self.base_url)
         soup = self.make_soup_from_url(url)
-        comments = []
+        comments = ResultSet(soup)
         if soup is not None:
-            comments = soup.find_all(text=lambda text: isinstance(text, Comment), limit=count, recursive=recursive)
+            r = soup.find_all(string=lambda string: isinstance(string, Comment), recursive=recursive)
+            if count is not None:
+                comments.extend(r[:count])
+                count -= len(comments)
+            else:
+                comments.extend(r)
 
             while depth > 0:
+                if count is not None and count == 0:
+                    break
                 depth -= 1
                 link_tags = soup.find_all('a', recursive=recursive)
                 links = [ self.get_link_tag(link_tag, download=False) for link_tag in link_tags ]
                 links = filter(lambda link: bool(link), links)   
                 link_objs = [ (link, parse_url(link)) for link in links ]
                 links = [ link_obj[0] for link_obj in link_objs if (base_url_obj.netloc and link_obj[1].netloc) and (base_url_obj.netloc in link_obj[1].netloc) ] 
-
-                with ThreadPoolExecutor() as executor:
-                    results = executor.map(lambda args: self.find_comments(*args), map(lambda link: (link, depth, count, recursive), links))
-                    for result in results:
-                        if result:
-                            comments.extend(result)
+                if count is None:
+                    # If count is not specified use threading
+                    with ThreadPoolExecutor() as executor:
+                        results = executor.map(lambda args: self.find_comments(*args), map(lambda link: (link, depth, count, recursive), links))
+                        for result in results:
+                            if result:
+                                comments.extend(result)
+                else:
+                    for link in links:
+                        r = self.find_comments(link, depth, count, recursive)
+                        comments.extend(r[:count])
+                        count -= len(comments)
+                        if count == 0:
+                            break
+                        continue
                 continue
         return comments
 
@@ -471,9 +524,10 @@ class BS4WebScraper(BS4BaseScraper):
             If it is an absolute path, the file will be saved in the specified path.
             Available file formats are: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for 
-                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
+                * `count` (int): Number of target items to be found on a url page before stopping.
+                * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.find_urls(url, target='a', depth=depth)
+        result = self.find_urls(url, target='a', depth=depth, count=kwargs.get('count', None))
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Links')
             self.save_results(result, file_path, **kwargs)
@@ -494,13 +548,14 @@ class BS4WebScraper(BS4BaseScraper):
             If it is an absolute path, the file will be saved in the specified path.
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for 
-                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
+                    * `count` (int): Number of target items to be found on a url page before stopping.
+                    * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
         """
         attrs = (
             {'rel': 'stylesheet'},
             {'type': 'text/css'}
         )
-        result = self.find_urls(url, target='link', attrs=attrs, depth=depth)
+        result = self.find_urls(url, target='link', attrs=attrs, depth=depth, count=kwargs.get('count', None))
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Stylesheets')
             self.save_results(result, file_path, **kwargs)
@@ -521,9 +576,10 @@ class BS4WebScraper(BS4BaseScraper):
             If it is an absolute path, the file will be saved in the specified path.
             Available file formats include: csv, txt, doc, docx, pdf...
             * `**kwargs` (Dict | optional): optional parameters to be used for 
-                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
+                * `count` (int): Number of target items to be found on a url page before stopping.
+                * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.find_urls(url, target='script', depth=depth)
+        result = self.find_urls(url, target='script', depth=depth, count=kwargs.get('count', None))
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Scripts')
             self.save_results(result, file_path, **kwargs)
@@ -544,13 +600,14 @@ class BS4WebScraper(BS4BaseScraper):
             If it is an absolute path, the file will be saved in the specified path.
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for 
-                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
+                * `count` (int): Number of target items to be found on a url page before stopping.
+                * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
         """
         attrs = (
             {'rel': 'preload'},
             {'as': 'font'}
         )
-        result = self.find_urls(url, target='link', attrs=attrs, depth=depth)
+        result = self.find_urls(url, target='link', attrs=attrs, depth=depth, count=kwargs.get('count', None))
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Font Links')
             self.save_results(result, file_path, **kwargs)
@@ -571,9 +628,10 @@ class BS4WebScraper(BS4BaseScraper):
             If it is an absolute path, the file will be saved in the specified path.
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for 
-                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
+                * `count` (int): Number of target items to be found on a url page before stopping.
+                * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
         """
-        result = self.find_urls(url, target='img', depth=depth)
+        result = self.find_urls(url, target='img', depth=depth, count=kwargs.get('count', None))
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Image Links')
             self.save_results(result, file_path, **kwargs)
@@ -594,11 +652,12 @@ class BS4WebScraper(BS4BaseScraper):
             If it is an absolute path, the file will be saved in the specified path.
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used when and where necessary
-                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
+                * `count` (int): Number of target items to be found on a url page before stopping.
+                * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
         """
         video_types = ('video/mp4', 'video/mpeg', 'video/ogg', 'video/webm', 'video/3gpp', 'video/quicktime')
         v_list = [ {'type': v} for v in video_types ]
-        result = self.find_urls(url, target='source', attrs=v_list, depth=depth)
+        result = self.find_urls(url, target='source', attrs=v_list, depth=depth, count=kwargs.get('count', None))
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Video Links')
             self.save_results(result, file_path, **kwargs)
@@ -618,12 +677,13 @@ class BS4WebScraper(BS4BaseScraper):
             * file_path (str, optional): File to save the links to. Defaults to "self.base_storage_dir/audios.txt".
             If it is an absolute path, the file will be saved in the specified path.
             Available file formats include: csv, txt, doc, docx, pdf...
-            * **kwargs (Dict | optional): optional parameters to be used for 
-                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
+            * **kwargs (Dict | optional): optional parameters to be used for
+                * `count` (int): Number of target items to be found on a url page before stopping. 
+                * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
         '''
         audio_types = ('audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/wav', 'audio/aac', 'audio/flac', 'audio/m4a', 'audio/wma')
         a_list = [ {'type': a} for a in audio_types ]
-        result = self.find_urls(url, target='source', attrs=a_list, depth=depth)
+        result = self.find_urls(url, target='source', attrs=a_list, depth=depth, count=kwargs.get('count', None))
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Audio Links')
             self.save_results(result, file_path, **kwargs)
@@ -642,13 +702,14 @@ class BS4WebScraper(BS4BaseScraper):
             If it is an absolute path, the file will be saved in the specified path.
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for
-                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
-                    * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
+                * `count` (int): Number of target items to be found on a url page before stopping.
+                * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
+                * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
         """
         email_re = r'[-|\w]+@\w+.\w{2,}'
         kwargs['re_flags'] = kwargs.get('re_flags', re.IGNORECASE)
         kwargs['csv_head'] = kwargs.get('csv_head', 'Emails')
-        return self.find_pattern(url, email_re, depth, save_to_file, file_path, kwargs)
+        return self.find_pattern(url, email_re, depth, save_to_file, file_path, **kwargs)
 
 
     def find_phone_numbers(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "phones.csv", **kwargs) -> List[Tuple[str, str]]:
@@ -665,15 +726,16 @@ class BS4WebScraper(BS4BaseScraper):
             If it is an absolute path, the file will be saved in the specified path.
             Available file formats include: csv, txt, doc, docx, pdf...
             * `**kwargs` (Dict | optional): optional parameters to be used for
-                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
-                    * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
+                * `count` (int): Number of target items to be found on a url page before stopping.
+                * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
+                * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
         """
         pn_re = r'(\+\d{1,3})?[\s-]?(\d{7,16})'
         kwargs['csv_head'] = kwargs.get('csv_head', 'Phone Numbers')
-        return self.find_pattern(url, pn_re, depth, save_to_file, file_path, kwargs)
+        return self.find_pattern(url, pn_re, depth, save_to_file, file_path, **kwargs)
 
 
-    def find_pattern(self, url: str, regex: str | AnyStr, depth: int = 0, save_to_file: bool = False, file_path: str = "re.csv", kwargs: Dict[str, str] = None) -> List[str]:
+    def find_pattern(self, url: str, regex: str | AnyStr, depth: int = 0, save_to_file: bool = False, file_path: str = "re.csv", count: int = None, **kwargs) -> List[str]:
         """
         Takes a regex pattern and returns a list of matches found in the given url.
 
@@ -686,8 +748,8 @@ class BS4WebScraper(BS4BaseScraper):
             If it is an absolute path, the file will be saved in the specified path.
             Available file formats include: csv, txt, doc, docx, pdf...
             * **kwargs (Dict | optional): optional parameters to be used for
-                    * `csv_head` (str): saving results and is passed to the `save_results` function if `save_to_file` is True.
-                    * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
+                * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
+                * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
         """
         self.set_base_url(url)
         base_url_obj = parse_url(self.base_url)
@@ -695,20 +757,41 @@ class BS4WebScraper(BS4BaseScraper):
         soup = self.make_soup_from_url(url)
         text = soup.get_text() if soup else ''
         result = list({ match for match in pattern.findall(text) })
-
+        if count is not None:
+            result = result[:count]
+            count -= len(result)
+            
         while depth > 0:
+            if count is not None and count == 0:
+                break
             depth -= 1
             link_tags = soup.find_all('a', recursive=True)
             links = [ self.get_link_tag(link_tag, download=False) for link_tag in link_tags ]
             links = filter(lambda link: bool(link), links)
             link_objs = [ (link, parse_url(link)) for link in links ]
             links = [ link_obj[0] for link_obj in link_objs if (base_url_obj.netloc and link_obj[1].netloc) and (base_url_obj.netloc in link_obj[1].netloc) ]
-
-            with ThreadPoolExecutor() as executor:
-                results = executor.map(lambda args: self.find_pattern(*args), map(lambda link: (link, regex, depth, save_to_file, file_path, kwargs), links))
-                for r in results:
-                    if r:
-                        result.extend(r)
+            if count is None:
+                # If count is not specified use threading
+                with ThreadPoolExecutor() as executor:
+                    kwargs_ = {
+                        'regex': regex,
+                        'depth': depth,
+                        'save_to_file': False,
+                        'file_path': file_path,
+                        **kwargs
+                    }
+                    results = executor.map(lambda kwargs: self.find_pattern(**kwargs), map(lambda link: {'url': link, **kwargs_}, links))
+                    for r in results:
+                        if r:
+                            result.extend(r)
+            else:
+                for link in links:
+                    r = self.find_pattern(link, regex=regex, depth=depth, save_to_file=False, file_path=file_path, count=count, **kwargs)
+                    result.extend(r[:count])
+                    count -= len(result)
+                    if count == 0:
+                        break
+                    continue
             continue
 
         result_ = []

@@ -3,7 +3,6 @@ DESCRIPTION: ::
     This module contains the BS4BaseScraper class which is the base class for creating scraper subclasses.
 """
 
-from os.path import isabs
 from typing import IO, Any, Dict, List
 import requests
 import os
@@ -19,7 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from . import utils
 from . import translate
-from .logging import Logger
+from .logger import Logger
 from .exceptions import (InvalidURLError, UnsupportedLanguageError, FileError, InvalidScrapableTagError)
 from .request_limiter import RequestLimitSetting
 from .file_handler import FileHandler
@@ -197,6 +196,43 @@ class BS4BaseScraper:
         return super().__setattr__(__name, __value)
 
 
+    def __exit__(self, exc_type, exc_value, traceback):
+        return self.reset()
+
+
+    def reset(self):
+        """
+        Resets the web scraper instance to its initial state.
+
+        Resets the following attributes to their initial values:
+        `_auth_credentials`, `_auth_url`, `_base_url`, `_is_authenticated`, `_level_reached`, `
+        _max_no_of_threads`, `url_query_params`, `translator`, `translate_to`, `logger`, `_scrapable_tags`.
+
+        Clears/closes the previous `session` object, reassigns a `requests.Session` instance and closes all file handlers.
+        """
+        self._auth_credentials = None
+        self._auth_url = None
+        self._base_url = None
+        self._is_authenticated = False
+        self._level_reached = 0
+        self._max_no_of_threads = 10
+        self.url_query_params = {}
+        self.translator = None
+        self.translate_to = None
+        self.logger = None
+        self._scrapable_tags = (
+            'script', 'link|{"rel": "stylesheet"}', 'img', 'use', 'audio',
+            'video', 'link|{"as": "font"}', 'link|{"rel": "shortcut"}', 'link|{"rel": "icon"}',
+            'link|{"rel": "shortcut icon"}', 'link|{"rel": "apple-touch-icon"}',
+            'link|{"type": "image/x-icon"}', 'link|{"type": "image/png"}',
+            'link|{"type": "image/jpg"}', 'link|{"type": "image/jpeg"}',
+            'link|{"type": "image/svg"}', 'link|{"type": "image/webp"}',
+            'meta|{"content": "og:image"}',
+        )
+        self._tc_ = []
+        self.close_session()
+        return self.renew_session()
+
     def log(self, msg: str, level: str | None = None) -> None:
         """
         Logs a message using `self.logger` or prints it out if `self.logger` is None.
@@ -211,6 +247,18 @@ class BS4BaseScraper:
         elif self.logger and not isinstance(self.logger, Logger):
             raise TypeError('Invalid type for `self.logger`. `self.logger` should be an instance of bs4_web_scraper.logging.Logger')
         return print(msg + '\n')
+
+
+    def close_session(self):
+        """Closes the session assigned to `self._session` (usually re-assigning a new session after) clearing all cookies in the process."""
+        if self._session:
+            self._session.cookies.clear()
+            return self._session.close()
+
+
+    def renew_session(self):
+        """Reassigns a new session to `self._session`"""
+        self._session = requests.Session()
 
 
     def get_base_url(self, url: str) -> str:
@@ -326,7 +374,7 @@ class BS4BaseScraper:
         """
         if isinstance(markup, IO) and not markup.readable():
             raise FileError("file object provided for `markup` does not support read")
-                
+               
         return BeautifulSoup(markup, self.parser, **kwargs)
 
     
@@ -380,7 +428,7 @@ class BS4BaseScraper:
             self.translate_to = translate_to
 
         if self.level_reached == 0:
-            self._base_url = self.get_base_url(url)
+            self.set_base_url(url)
         if credentials:
             self.set_auth_credentials(credentials)   
 
@@ -397,7 +445,7 @@ class BS4BaseScraper:
         soup = self.get_associated_files_and_return_soup(index_file_hdl)
         self.save_to_file(self.markup_filename, self.storage_path, content=soup.prettify(encoding='utf-8'), translate=False)
 
-        while scrape_depth > 0:
+        while True and scrape_depth > 0:
             # Start scraping at level 'n = n + 1'
             link_tags = soup.find_all('a') # get all links on the page
             self.log(f'~~~SCRAPING AT LEVEL {self.level_reached + 1}~~~\n')
@@ -418,6 +466,7 @@ class BS4BaseScraper:
                 for markup_file_hdl in results:
                     markup_file_hdl.open_file('r')
                     soup = self.make_soup(markup_file_hdl.file)
+                    markup_file_hdl.close_file()
                     self.storage_path = markup_file_hdl.filepath
                     self.markup_filename = markup_file_hdl.filename
             continue
@@ -443,6 +492,8 @@ class BS4BaseScraper:
 
     def get_request_headers(self) -> dict:
         '''Returns a suitable request header'''
+        if not self.base_url:
+            raise AttributeError('Attribute `base_url` not set.')
         if self.auth_credentials:
             if not self._request_user_agent:
                 user_agents = utils.generate_random_user_agents()
@@ -466,6 +517,7 @@ class BS4BaseScraper:
             "Sec-Fetch-Mode": "navigate",
             "Sec-Fetch-Site": "none", 
             "Sec-Fetch-User": "?1", 
+            "Keep-Alive": "True",
         }
         return headers
 
@@ -496,7 +548,7 @@ class BS4BaseScraper:
             self.log('AUTHENTICATION FAILED!!!\n', level='ERROR')
 
 
-    def get(self, url: str) -> requests.Response | None:  
+    def get(self, url: str,):  
         '''
         Makes a GET request to url given, authenticates requests and limits request rate based on limit setting if provided. 
         
@@ -507,6 +559,7 @@ class BS4BaseScraper:
         '''  
         url_obj = parse_url(url)
         url = url_obj.url
+        self.set_base_url(url)
         headers = self.get_request_headers()
         self._session.headers.update(headers)        
 
@@ -586,17 +639,20 @@ class BS4BaseScraper:
         if not 'b' in mode and isinstance(content, bytes):
             raise TypeError("`mode` specified is a string mode. content provide is of type bytes not str")
 
+        storage_path = storage_path.replace('/', '\\')
+        storage_path = os.path.normpath(storage_path.removeprefix('\\').removesuffix('\\'))
         try:
             if os.path.isabs(storage_path):
+                os.makedirs(os.path.dirname(storage_path), exist_ok=True)
                 if os.path.isdir(storage_path):
                     file_path = f"{storage_path}\{filename}"
                 else:
                     file_path = storage_path   
             else:
                 file_path = os.path.normpath(f"{self.base_storage_dir}\{storage_path}\{filename}")
-                
+               
             file_hdl = FileHandler(file_path, encoding, exists_ok=True, allow_any=True)
-
+            file_hdl.close_file()
             # Translate content if necessary
             if translate and (self.translate_to and file_hdl.filetype in ['xhtml', 'htm', 'shtml', 'html', 'xml']):
                 content = self.translator.translate_markup(content, target_lang=self.translate_to)
@@ -604,12 +660,12 @@ class BS4BaseScraper:
             file_hdl.write_to_file(content, mode)
             return file_hdl
         
-        except Exception as e:
+        except (Exception, BaseException) as e:
             self.log(e.__str__(), level='error')
             pass
             
 
-    def parse_storage_path_from_Url(self, url_obj: Url, remove_str: str | None = None) -> str:
+    def parse_storage_path_from_Url(self, url_obj: Url, remove_str: str | None = None):
         '''
         Returns a suitable storage path from a Url object.
 
@@ -617,9 +673,9 @@ class BS4BaseScraper:
         * `url_obj` (Url): Url object to be parsed.
         * `remove_str` (str): string to be removed from the path. Defaults to None.
         '''
-        url_path = url_obj.path or ''
+        url_path = url_obj.path if url_obj.path is not None else ''
         url_path = url_path.replace(remove_str, '') if remove_str else url_path
-        path = os.path.normpath(url_path.replace('/', '\\'))
+        path = os.path.normpath(url_path.replace('/', '\\').removeprefix('\\'))
         return path
 
 
@@ -675,8 +731,17 @@ class BS4BaseScraper:
         url_obj = parse_url(url.removesuffix('/'))
         if not url_obj.netloc:
             raise InvalidURLError
-    
-        url_based_name, url_based_ext = os.path.splitext((url_obj.path or '').removesuffix('/').split('/')[-1])
+        self.set_base_url(url_obj.url)
+
+        # Find file name and extension in url if any
+        url_path = (url_obj.path or '').removesuffix('/')
+        url_based_filepath, url_based_file_ext = os.path.splitext(url_path)
+        if url_based_file_ext:
+            url_based_name = url_based_filepath.split('/')[-1]
+            url_based_ext = url_based_file_ext
+        else:
+            url_based_name, url_based_ext = ('', '')
+
         if check_ext and not url_based_ext:
             raise ValueError('Invalid url. No extension found in url. The url may be incorrect.')
         filename = f"{url_based_name}{url_based_ext}"
@@ -700,8 +765,7 @@ class BS4BaseScraper:
         # check if url has query params
         has_query_params = bool(url_obj.query)
         if file_storage_path is None:
-            file_storage_path = self.parse_storage_path_from_Url(url_obj, remove_str=f"{url_based_name}{url_based_ext}")  
-            file_storage_path = file_storage_path.removeprefix('\\').removesuffix('\\')    
+            file_storage_path = self.parse_storage_path_from_Url(url_obj=url_obj, remove_str=f"{url_based_name}{url_based_ext}")
    
         if has_query_params and (url_obj.query not in self.url_query_params.keys()):
             if unique_if_query_params is True:
@@ -714,15 +778,17 @@ class BS4BaseScraper:
         if not has_query_params or (url_obj.query not in self.url_query_params.keys()):
             if os.path.isabs(file_storage_path):
                 full_path = f'{file_storage_path}/{filename}'
-                os.makedirs(os.path.dirname(full_path), exist_ok=True)
             else:
                 full_path = f'{self.base_storage_dir}\{file_storage_path}\{filename}'
             full_path = os.path.normpath(full_path)
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+
             # check if file already exists
             if os.path.exists(full_path) is False:
                 response = self.get(url_obj.url)
             else:
                 file_hdl = FileHandler(full_path, exists_ok=True, allow_any=True)
+                file_hdl.close_file()
                 if overwrite is True:
                     file_hdl.delete_file()
                     response = self.get(url_obj.url)
@@ -752,8 +818,8 @@ class BS4BaseScraper:
         if markup_file_handler.filetype not in ['xhtml', 'htm', 'shtml', 'html', 'xml']:
             raise FileError('Unsupported file type')
 
-        markup_file_handler.open_file('r')
-        soup = self.make_soup(markup_file_handler.file)
+        soup = self.make_soup(markup_file_handler.read_file('rb'))
+        markup_file_handler.close_file()
         tags = ResultSet(soup)
         for scrapable_tag in self._scrapable_tags:
             try:
@@ -795,16 +861,14 @@ class BS4BaseScraper:
         Args::
         * `rra` (str): bs4.element.Tag resource-related-attribute
         '''
+        if not self.base_url:
+            raise AttributeError('`self._base_url` is not set. Ensure to set it before call this method4')
+        rra = rra.replace('\\', '/')
+        # Formatting rra properly
+        rra = '/'.join([ i for i in rra.split('/') if i ])
         url_obj = parse_url(rra)
-        if url_obj.scheme and url_obj.netloc:
-            actual_url = url_obj.url
-        elif url_obj.netloc and not url_obj.scheme:
-            actual_url = Url(
-                scheme='http', host=url_obj.host, 
-                path=url_obj.path, port= url_obj.port, 
-                query=url_obj.query, auth=url_obj.auth,
-                fragment=url_obj.fragment
-            ).url
+        if url_obj.scheme:
+            actual_url = rra
         else:
             actual_url = urljoin(self.base_url, url_obj.url)
         return actual_url

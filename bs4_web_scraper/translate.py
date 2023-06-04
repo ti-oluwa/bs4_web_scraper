@@ -6,7 +6,7 @@ DESCRIPTION: ::
     Enterprises provide free services, we should be grateful instead of making trouble.
 """
 
-from typing import Dict, List
+from typing import Dict, List, IO
 import time
 import copy
 import random
@@ -17,7 +17,7 @@ import translators as ts
 from translators.server import TranslatorsServer, tss
 
 from . import utils
-from .logging import Logger
+from .logger import Logger
 from .file_handler import FileHandler
 from .exceptions import TranslationError, UnsupportedLanguageError
 
@@ -84,6 +84,9 @@ class Translator:
     def __init__(self, translation_engine: str = "bing", ) -> None:
         self.translation_engine = translation_engine
 
+    @property
+    def server(self):
+        return self._server
 
     @property
     def supported_languages(self) -> dict:
@@ -93,6 +96,25 @@ class Translator:
             func(args)
             return getattr(self._server, f"_{self.translation_engine}").language_map
         return {}
+
+
+    def detect_language(self, _s: str) -> Dict:
+        """
+        Detects the language of the specified text.
+
+        NOTE: This method is not guaranteed to work always.
+        An example of a case where the function does not work is in detecting Amharic.
+
+        Returns a dictionary containing the language code and confidence score.
+
+        Args:
+            _s (str): The text to detect the language of.
+        """
+        try:
+            details = self.server.translate_text(query_text=_s, translator='bing', is_detail_result=True)
+        except:
+            return {}
+        return details.get('detectedLanguage', {}) if details else {}
 
     
     def _log(self, message: str, level: str | None = None) -> None:
@@ -252,13 +274,13 @@ class Translator:
                 if self._cache.get(text, None):
                     return self._cache[text]
                 else:
-                    translated_text = ts.translate_text(
+                    translated_text = self.server.translate_text(
                                                 query_text=text, to_language=target_lang, from_language=src_lang, 
                                                 translator=self.translation_engine, **kwargs_
                                                 )
                     self._cache[text] = translated_text
                     return translated_text
-            return ts.translate_text(
+            return self.server.translate_text(
                                 query_text=text, to_language=target_lang, from_language=src_lang, 
                                 translator=self.translation_engine, **kwargs_
                                 )
@@ -279,7 +301,6 @@ class Translator:
             src_lang (str, optional): Source language. Defaults to "auto".
             target_lang (str, optional): Target language. Defaults to "en".
             **kwargs: Keyword arguments to be passed to `translators.translate_markup`.
-                    :param is_detail_result: boolean, default False.
                     :param professional_field: str, support baidu(), caiyun(), alibaba() only.
                     :param timeout: float, default None.
                     :param proxies: dict, default None.
@@ -297,7 +318,7 @@ class Translator:
         if not isinstance(markup, (str, bytes)):
             raise TypeError("Invalid type for `markup`")
         is_bytes = isinstance(markup, bytes)
-
+        kwargs.pop('is_detail_result', None)
         soup = BeautifulSoup(markup, 'lxml')
         translated_markup = self.translate_soup(soup, src_lang, target_lang, **kwargs).prettify()
 
@@ -364,12 +385,11 @@ class Translator:
 
         Supported file types include: .txt, .csv, .doc, .docx, .pdf, .md..., mostly files with text content.
 
-        Args:
-            filepath (str): path to the file to be translated.
-            src_lang (str, optional): Source language. Defaults to "auto".
-            target_lang (str, optional): Target language. Defaults to "en".
-            **kwargs: Keyword arguments to be passed to `translators.translate_text`.
-                    :param is_detail_result: boolean, default False.
+        Args::
+            * filepath (str): path to the file to be translated.
+            * src_lang (str, optional): Source language. Defaults to "auto".
+            * target_lang (str, optional): Target language. Defaults to "en".
+            * **kwargs: Keyword arguments to be passed to `translators.translate_text`.
                     :param professional_field: str, support baidu(), caiyun(), alibaba() only.
                     :param timeout: float, default None.
                     :param proxies: dict, default None.
@@ -388,12 +408,16 @@ class Translator:
         kwargs_ = {
             'if_ignore_empty_query': True,
         }
+        kwargs.pop('is_detail_result', None)
         kwargs_.update(kwargs)
         file_handler = FileHandler(filepath, not_found_ok=False)
-        file_content = file_handler.read_file()
+        file_content = file_handler.file_content
 
         if file_handler.filetype in ['xhtml', 'htm', 'shtml', 'html', 'xml']:
-            return self.translate_markup(file_content, src_lang, target_lang, **kwargs)
+            translated_markup = self.translate_markup(file_content, src_lang, target_lang, **kwargs)
+            file_handler.write_to_file(translated_markup, 'w')
+            file_handler.close_file()
+            return file_handler
 
         slice_size = kwargs_.get('limit_of_length', 4000)
         contents = utils.slice_iterable(file_content, slice_size)
@@ -401,7 +425,7 @@ class Translator:
             translated_contents = list(map(lambda text: self.translate_text(text, src_lang, target_lang, False, **kwargs_), contents))
             translated_text = "".join(translated_contents)
             file_handler.write_to_file(translated_text, write_mode='w+')
-            file_handler._open_file(mode='r+')
+            file_handler.close_file()
             return file_handler
         except Exception as e:
             raise TranslationError(f"File cannot be translated. {e}")
