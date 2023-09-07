@@ -271,7 +271,7 @@ class BS4BaseScraper:
         '''
         url_obj = parse_url(url)
         if not (url_obj.host and url_obj.scheme):
-            raise InvalidURLError("Invalid url! URL has no host and no scheme")
+            raise InvalidURLError(f"Invalid url! URL has no host or no valid scheme.")
 
         new_url_obj = Url(scheme=url_obj.scheme, host=url_obj.host, port=url_obj.port)
         return new_url_obj.url
@@ -695,6 +695,12 @@ class BS4BaseScraper:
             src = 'src'
         if tag_name in ['link', 'a', 'use']:
             src = 'href'
+        if tag_name in ['meta']:
+            src = 'content'
+        if tag_name in ['object']:
+            src = 'data'
+        if tag_name in ['form']:
+            src = 'action'
         return src
         
 

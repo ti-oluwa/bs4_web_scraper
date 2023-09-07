@@ -111,7 +111,7 @@ class Logger:
         return None
 
     
-    def log(self, message: str, level: str | None = None):
+    def log(self, message: str | object, level: str | None = None):
         '''
         Logs a message to a file using the specified level. If no level is provided, the default level is INFO.
 
@@ -142,27 +142,27 @@ class Logger:
         return FileHandler(self.filename).copy_to(destination)
 
 
-    def log_info(self, message: str) -> None:
+    def log_info(self, message: str  | object) -> None:
         '''Logs a message to a file using the INFO level'''
         self._logger.info(msg=message)
     
 
-    def log_debug(self, message: str) -> None:
+    def log_debug(self, message: str  | object) -> None:
         '''Logs a message to a file using the DEBUG level'''
         self._logger.debug(msg=message)
     
 
-    def log_error(self, message: str) -> None:
+    def log_error(self, message: str  | object) -> None:
         '''Logs a message to a file using the ERROR level'''
         self._logger.error(msg=message)
 
 
-    def log_warning(self, message: str) -> None:
+    def log_warning(self, message: str  | object) -> None:
         '''Logs a message to a file using the WARNING level'''
         self._logger.warning(msg=message)
 
     
-    def log_critical(self, message: str) -> None:
+    def log_critical(self, message: str  | object) -> None:
         '''Logs a message to a file using the CRITICAL level'''
         self._logger.critical(msg=message)
         

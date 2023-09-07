@@ -692,7 +692,7 @@ class BS4WebScraper(BS4BaseScraper):
 
     def find_emails(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "emails.csv", **kwargs) -> List[str]:
         """
-        Searches for and returns a list of emails found in the given url.
+        Searches for and returns a list of emails found in the given url. Checks links for emails as well.
 
         Args:
             * url (str): Url to get the emails from.
@@ -706,15 +706,16 @@ class BS4WebScraper(BS4BaseScraper):
                 * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
                 * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
         """
-        email_re = r'[-|\w]+@\w+.\w{2,}'
+        email_re = r'[-|\.\w]+@\w+.\w{2,}'
         kwargs['re_flags'] = kwargs.get('re_flags', re.IGNORECASE)
         kwargs['csv_head'] = kwargs.get('csv_head', 'Emails')
         return self.find_pattern(url, email_re, depth, save_to_file, file_path, **kwargs)
-
+    
 
     def find_phone_numbers(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "phones.csv", **kwargs) -> List[Tuple[str, str]]:
         """
         Searches for and returns a list of phone numbers which conform to the E.164 standard found in the given url. 
+        Checks links for phone numbers as well.
 
         Returns a list of phone numbers.
 
@@ -733,11 +734,11 @@ class BS4WebScraper(BS4BaseScraper):
         pn_re = r'(\+\d{1,3})?[\s-]?(\d{7,16})'
         kwargs['csv_head'] = kwargs.get('csv_head', 'Phone Numbers')
         return self.find_pattern(url, pn_re, depth, save_to_file, file_path, **kwargs)
-
+    
 
     def find_pattern(self, url: str, regex: str | AnyStr, depth: int = 0, save_to_file: bool = False, file_path: str = "re.csv", count: int = None, **kwargs) -> List[str]:
         """
-        Takes a regex pattern and returns a list of matches found in the given url.
+        Takes a regex pattern and returns a list of matches found in the given url's text content.
 
         Args:
             * url (str): Url to get the matches from.
@@ -756,6 +757,12 @@ class BS4WebScraper(BS4BaseScraper):
         pattern = re.compile(regex, flags=kwargs.get('re_flags', re.MULTILINE))
         soup = self.make_soup_from_url(url)
         text = soup.get_text() if soup else ''
+        # Search for pattern in link's hrefs too
+        link_tags = soup.find_all('a', recursive=True)
+        links = [ self.get_link_tag(link_tag, download=False) for link_tag in link_tags ]
+        links = list(filter(lambda link: bool(link), links))
+        links.insert(0, text)
+        text = '\n'.join(links)
         result = list({ match for match in pattern.findall(text) })
         if count is not None:
             result = result[:count]
