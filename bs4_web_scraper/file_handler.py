@@ -52,8 +52,14 @@ class FileHandler:
     _file: IO = None
     created_file: bool = False
 
-    def __init__(self, filepath: str, encoding: str = 'utf-8', not_found_ok: bool = True, 
-                    exists_ok: bool = True, allow_any: bool = False) -> None:
+    def __init__(
+            self, 
+            filepath: str, 
+            encoding: str = 'utf-8', 
+            not_found_ok: bool = True, 
+            exists_ok: bool = True, 
+            allow_any: bool = False
+        ) -> None:
         self.filepath = os.path.abspath(filepath)
         self.encoding = encoding
         self.allow_any = allow_any

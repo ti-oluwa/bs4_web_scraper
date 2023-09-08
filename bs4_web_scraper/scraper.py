@@ -8,7 +8,6 @@ DESCRIPTION: ::
     websites you are scraping by making a donation.
 """
 import os
-from os.path import isabs
 import re
 from typing import (AnyStr, Dict, List, Tuple)
 from collections.abc import Iterable
@@ -28,14 +27,21 @@ class BS4WebScraper(BS4BaseScraper):
     #### BeautifulSoup4 web scraper class with support for authentication and translation.
 
     #### Instantiation and Example Usage: ::
-    >>> bs4_scraper = BS4WebScraper(parser='lxml', markup_filename='google.html',
-                        no_of_requests_before_pause=50, scrape_session_pause_duration='auto',
-                        base_storage_dir='./google', storage_path='/', 
-                        log_filepath='google.log', ...)
-    >>> bs4_scraper.scrape(url='https://www.google.com', scrape_depth=0)
+    ```
+    bs4_scraper = BS4WebScraper(
+            parser='lxml', 
+            markup_filename='google.html',
+            no_of_requests_before_pause=50, 
+            scrape_session_pause_duration='auto',
+            base_storage_dir='./google', 
+            storage_path='/', 
+            log_filepath='google.log', 
+        ...
+        )
+    bs4_scraper.scrape(url='https://www.google.com', scrape_depth=0)
         # 'google.html' saves to './google/google.html'
         # A log file 'google.log' is created in the './google' directory
-
+    ```
 
     NOTE: On instantiation of the class, a new request session is created. This session is used to make all related requests.
 
@@ -123,11 +129,21 @@ class BS4WebScraper(BS4BaseScraper):
 
     @attr str `_request_user_agent`: 'User-Agent' header used in requests.
 
+    @attr int `request_timeout`: Timeout to be used when making requests.
+
+    @attr bool `log_to_console`: Whether to print log messages on console also.
+
     """
 
     
-    def scrape(self, url: str, scrape_depth: int = 0, credentials: Dict[str, str] | None=None, 
-                translate_to: str = None, translation_engine: str = "default") -> None:
+    def scrape(
+            self, 
+            url: str, 
+            scrape_depth: int = 0, 
+            credentials: Dict[str, str] | None = None, 
+            translate_to: str = None, 
+            translation_engine: str = "default"
+        ) -> None:
         """
         #### Wrapper function for the private `_scrape` function of the class.
 
@@ -150,7 +166,8 @@ class BS4WebScraper(BS4BaseScraper):
         #### AUTHENTICATION
         To scrape websites that require authentication. pass in the authentication credentials as an argument to the function.
         #### NOTE: credentials should take the format
-        >>> credentials = {
+        ```
+        credentials = {
             'auth_url': '<authentication_url>',
             'auth_username_field': '<username_field_name>',
             'auth_password_field': '<password_field_name>',
@@ -162,16 +179,16 @@ class BS4WebScraper(BS4BaseScraper):
         }
         bs4_scraper = BS4WebScraper(...)
         bs4_scraper.scrape(..., credentials=credentials)
-
+        ```
 
         #### TRANSLATION
         To translate scraped content to a specific language, the `translate_to` argument has to be provided. 
         To get a dict of the supported languages. do:
-        
-        >>> bs4_scraper = BS4WebScraper(...)
-        >>> print(bs4_scraper.translator.supported_languages)
-        >>> # Output: {'af': 'afrikaans', 'sq': 'albanian', 'am': 'amharic', ...}
-
+        ```
+        bs4_scraper = BS4WebScraper(...)
+        print(bs4_scraper.translator.supported_languages)
+        # Output: {'af': 'afrikaans', 'sq': 'albanian', 'am': 'amharic', ...}
+        ```
         Make sure to set the `translation_engine` argument to the engine you want to use for translation.
 
         For instance to translate to 'amharic', do:
@@ -204,8 +221,15 @@ class BS4WebScraper(BS4BaseScraper):
         return None
 
     
-    def download_urls(self, urls: Iterable[Dict[str, str]] | Iterable[str], save_to: str | None = None, overwrite: bool = False,
-                        check_ext: bool = True, fast_download: bool = False, unique_if_query_params: bool = False):
+    def download_urls(
+            self, 
+            urls: Iterable[Dict[str, str]] | Iterable[str], 
+            save_to: str | None = None, 
+            overwrite: bool = False,
+            check_ext: bool = True, 
+            fast_download: bool = False, 
+            unique_if_query_params: bool = False
+        ):
         '''
         Download files from the given urls using the `download_url` method. Saves the files in a storage path in `self.base_storage_dir`
         or in an absolute path as provided.
@@ -297,8 +321,15 @@ class BS4WebScraper(BS4BaseScraper):
         return None
 
 
-    def find_urls(self, url: str, target: str, attrs: Dict[str, str] | Iterable[Dict[str, str]] = {}, 
-                        depth: int = 0, count: int = None, recursive: bool = True) -> List[str]:
+    def find_urls(
+            self, 
+            url: str, 
+            target: str, 
+            attrs: Dict[str, str] | Iterable[Dict[str, str]] = {}, 
+            depth: int = 0, 
+            count: int = None, 
+            recursive: bool = True
+        ) -> List[str]:
         """
         Parses out the url/links on all elements with the target name in specified url.
         NOTE: This only works for elements with a resource(url) related attribute. To get markup elements with no resource related attribute, use `find_all_tags`.
@@ -366,8 +397,15 @@ class BS4WebScraper(BS4BaseScraper):
         return urls
     
 
-    def find_all_tags(self, url: str, target: str, attrs: Dict[str, str] | Iterable[Dict[str, str]] = {},
-                        depth: int = 0, count: int = None, recursive: bool = True) -> ResultSet[Tag]:
+    def find_all_tags(
+            self, 
+            url: str, 
+            target: str, 
+            attrs: Dict[str, str] | Iterable[Dict[str, str]] = {},
+            depth: int = 0, 
+            count: int = None, 
+            recursive: bool = True
+        ) -> ResultSet[Tag]:
         """
         Gets all markup elements with the target name in specified url.
 
@@ -426,7 +464,14 @@ class BS4WebScraper(BS4BaseScraper):
         return tags
 
 
-    def find_tags_by_id(self, url: str, id: str, depth: int = 0, count: int = None, recursive: bool = True):
+    def find_tags_by_id(
+            self, 
+            url: str, 
+            id: str, 
+            depth: int = 0, 
+            count: int = None, 
+            recursive: bool = True
+        ):
         """
         Gets all markup elements with the target id in specified url.
 
@@ -439,10 +484,24 @@ class BS4WebScraper(BS4BaseScraper):
             * count (int): Number of target items to be found on a url page before stopping.
             * recursive (bool): Performs a recursive search of url page's children
         """
-        return self.find_all_tags(url, target=None, attrs={"id": id}, depth=depth, count=count, recursive=recursive)
+        return self.find_all_tags(
+            url, 
+            target=None, 
+            attrs={"id": id}, 
+            depth=depth, 
+            count=count, 
+            recursive=recursive
+        )
 
 
-    def find_tags_by_class(self, url: str, class_: str, depth: int = 0, count: int = None, recursive: bool = True):
+    def find_tags_by_class(
+            self, 
+            url: str, 
+            class_: str, 
+            depth: int = 0, 
+            count: int = None, 
+            recursive: bool = True
+        ):
         """
         Gets all markup elements with the target class name in specified url.
 
@@ -455,10 +514,23 @@ class BS4WebScraper(BS4BaseScraper):
             * count (int): Number of target items to be found on a url page before stopping.
             * recursive (bool): Performs a recursive search of url page's children
         """
-        return self.find_all_tags(url, target=None, attrs={"class": class_}, depth=depth, count=count, recursive=recursive)
+        return self.find_all_tags(
+            url, 
+            target=None, 
+            attrs={"class": class_}, 
+            depth=depth, 
+            count=count, 
+            recursive=recursive
+        )
 
 
-    def find_comments(self, url: str, depth: int = 0, count: int = None, recursive: bool = True):
+    def find_comments(
+            self, 
+            url: str, 
+            depth: int = 0, 
+            count: int = None, 
+            recursive: bool = True
+        ):
         """
         Gets all comments in specified url.
 
@@ -510,7 +582,14 @@ class BS4WebScraper(BS4BaseScraper):
         return comments
 
     
-    def find_links(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "links.csv", **kwargs) -> List[str]:
+    def find_links(
+            self, 
+            url: str, 
+            depth: int = 0, 
+            save_to_file: bool = False, 
+            file_path: str = "links.csv", 
+            **kwargs
+        ) -> List[str]:
         """
         Gets all the links from the given url.
 
@@ -534,7 +613,14 @@ class BS4WebScraper(BS4BaseScraper):
         return result
 
 
-    def find_stylesheets(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "styles.csv", **kwargs) -> List[str]:
+    def find_stylesheets(
+            self, 
+            url: str, 
+            depth: int = 0, 
+            save_to_file: bool = False, 
+            file_path: str = "styles.csv", 
+            **kwargs
+        ) -> List[str]:
         """
         Gets all the stylesheet links from the given url.
 
@@ -562,7 +648,14 @@ class BS4WebScraper(BS4BaseScraper):
         return result
             
 
-    def find_scripts(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "scripts.csv", **kwargs) -> List[str]:
+    def find_scripts(
+            self, 
+            url: str, 
+            depth: int = 0, 
+            save_to_file: bool = False, 
+            file_path: str = "scripts.csv", 
+            **kwargs
+        ) -> List[str]:
         """
         Gets all the script links from the given url.
 
@@ -586,7 +679,14 @@ class BS4WebScraper(BS4BaseScraper):
         return result
 
     
-    def find_fonts(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "fonts.csv", **kwargs) -> List[str]:
+    def find_fonts(
+            self, 
+            url: str, 
+            depth: int = 0, 
+            save_to_file: bool = False, 
+            file_path: str = "fonts.csv", 
+            **kwargs
+        ) -> List[str]:
         """
         Gets all the font links from the given url.
 
@@ -614,7 +714,14 @@ class BS4WebScraper(BS4BaseScraper):
         return result
 
     
-    def find_images(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "images.csv", **kwargs) -> List[str]:
+    def find_images(
+            self, 
+            url: str, 
+            depth: int = 0,
+            save_to_file: bool = False, 
+            file_path: str = "images.csv", 
+            **kwargs
+        ) -> List[str]:
         """
         Gets all the image links from the given url.
 
@@ -638,7 +745,14 @@ class BS4WebScraper(BS4BaseScraper):
         return result
 
 
-    def find_videos(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "videos.csv", **kwargs) -> List[str]:
+    def find_videos(
+            self, 
+            url: str, 
+            depth: int = 0, 
+            save_to_file: bool = False, 
+            file_path: str = "videos.csv", 
+            **kwargs
+        ) -> List[str]:
         """
         Gets all the video links from the given url.
 
@@ -664,7 +778,14 @@ class BS4WebScraper(BS4BaseScraper):
         return result
 
 
-    def find_audios(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "audios.csv", **kwargs) -> List[str]:
+    def find_audios(
+            self, 
+            url: str, 
+            depth: int = 0, 
+            save_to_file: bool = False, 
+            file_path: str = "audios.csv", 
+            **kwargs
+        ) -> List[str]:
         '''
         Gets all the audio links from the given url.
 
@@ -690,7 +811,14 @@ class BS4WebScraper(BS4BaseScraper):
         return result
         
 
-    def find_emails(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "emails.csv", **kwargs) -> List[str]:
+    def find_emails(
+            self, 
+            url: str, 
+            depth: int = 0, 
+            save_to_file: bool = False, 
+            file_path: str = "emails.csv", 
+            **kwargs
+        ) -> List[str]:
         """
         Searches for and returns a list of emails found in the given url. Checks links for emails as well.
 
@@ -712,7 +840,14 @@ class BS4WebScraper(BS4BaseScraper):
         return self.find_pattern(url, email_re, depth, save_to_file, file_path, **kwargs)
     
 
-    def find_phone_numbers(self, url: str, depth: int = 0, save_to_file: bool = False, file_path: str = "phones.csv", **kwargs) -> List[Tuple[str, str]]:
+    def find_phone_numbers(
+            self, 
+            url: str, 
+            depth: int = 0, 
+            save_to_file: bool = False, 
+            file_path: str = "phones.csv", 
+            **kwargs
+        ) -> List[Tuple[str, str]]:
         """
         Searches for and returns a list of phone numbers which conform to the E.164 standard found in the given url. 
         Checks links for phone numbers as well.
@@ -736,7 +871,15 @@ class BS4WebScraper(BS4BaseScraper):
         return self.find_pattern(url, pn_re, depth, save_to_file, file_path, **kwargs)
     
 
-    def find_pattern(self, url: str, regex: str | AnyStr, depth: int = 0, save_to_file: bool = False, file_path: str = "re.csv", count: int = None, **kwargs) -> List[str]:
+    def find_pattern(
+            self, url: str, 
+            regex: str | AnyStr, 
+            depth: int = 0, 
+            save_to_file: bool = False, 
+            file_path: str = "re.csv", 
+            count: int = None, 
+            **kwargs
+        ) -> List[str]:
         """
         Takes a regex pattern and returns a list of matches found in the given url's text content.
 
