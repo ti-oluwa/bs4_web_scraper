@@ -3,7 +3,7 @@ DESCRIPTION: ::
     This module contains the BS4BaseScraper class which is the base class for creating scraper subclasses.
 """
 
-from typing import IO, Any, Dict, List
+from typing import IO, Any, Dict, List, Tuple
 import requests
 import os
 import random
@@ -31,13 +31,15 @@ class BS4BaseScraper:
     Avoid instantiating this class directly. Instead, create a subclass of this class and override the `scrape` method.
 
     #### Creating a subclass::
-    >>> class BS4Scraper(BS4BaseScraper):
-            def scrape(*args, **kwargs):
-                # You can add custom code here
-                return super()._scrape(*arg, **kwargs)
-            # create custom methods
-            def custom_method(...):
-                ...
+    ```
+    class BS4Scraper(BS4BaseScraper):
+        def scrape(*args, **kwargs):
+            # You can add custom code here
+            return super()._scrape(*arg, **kwargs)
+        # create custom methods
+        def custom_method(...):
+            ...
+    ```
 
     You can get an idea of what arguments and keyword arguments are expected by the `_scrape` function by doing:
     >>> help(super()._scrape)
@@ -106,6 +108,10 @@ class BS4BaseScraper:
 
     @attr str `_request_user_agent`: 'User-Agent' header used in requests.
 
+    @attr int `request_timeout`: Timeout to be used when making requests.
+
+    @attr bool `log_to_console`: Whether to print log messages on console also.
+
     """
 
     _base_url: str = None
@@ -131,10 +137,19 @@ class BS4BaseScraper:
     )
     _tc_: List = []
 
-    def __init__(self, parser: str = 'lxml', markup_filename: str = "index.html", 
-                no_of_requests_before_pause: int = 20, scrape_session_pause_duration: int | float | Any = "auto",
-                max_no_of_retries: int = 3, base_storage_dir: str = '.', storage_path: str = '', 
-                log_filepath: str | None = None) -> None:
+    def __init__(
+            self, 
+            parser: str = 'lxml', 
+            markup_filename: str = "index.html", 
+            no_of_requests_before_pause: int = 20, 
+            scrape_session_pause_duration: int | float | Any = "auto",
+            max_no_of_retries: int = 3, 
+            request_timeout: Tuple[int, int] | int = (10, 10), 
+            base_storage_dir: str = '.', 
+            storage_path: str = '', 
+            log_filepath: str | None = None,
+            log_to_console: bool = True,
+        ) -> None:
         """
         Initializes the web scraper instance.
         """
@@ -146,18 +161,22 @@ class BS4BaseScraper:
         if log_filepath:
             self.logger = Logger(name=f"Logger for {self.__class__.__name__}", log_filepath=log_filepath)
             self.logger.set_base_level('INFO')
-            self.logger.to_console = True
+            self.logger.to_console = log_to_console
 
         self.parser = parser
         self.markup_filename = markup_filename
         self.max_no_of_retries = max_no_of_retries
         self.base_storage_dir = os.path.abspath(base_storage_dir)
         self.storage_path = storage_path
+        self.request_timeout = request_timeout
         self.request_limit_setting = RequestLimitSetting(
-                                                        no_of_requests_before_pause, 
-                                                        scrape_session_pause_duration, 
-                                                        self.max_no_of_retries, self.logger
-                                                        )
+            request_count=no_of_requests_before_pause, 
+            pause_duration=scrape_session_pause_duration, 
+            max_retries=self.max_no_of_retries, 
+            logger=self.logger,
+        )
+        self.log_to_console = log_to_console
+
 
     @property
     def is_authenticated(self):
@@ -182,6 +201,12 @@ class BS4BaseScraper:
     @property
     def session(self):
         return self._session
+
+    @session.setter
+    def set_session(self, s: requests.Session):
+        if not isinstance(s, requests.Session):
+            raise Exception(f"Expected session of type `requests.Session` got type `{type(s).__name__}`")
+        self._session = s
 
 
     def __setattr__(self, __name: str, __value: Any) -> None:
@@ -233,6 +258,7 @@ class BS4BaseScraper:
         self.close_session()
         return self.renew_session()
 
+
     def log(self, msg: str, level: str | None = None) -> None:
         """
         Logs a message using `self.logger` or prints it out if `self.logger` is None.
@@ -246,7 +272,10 @@ class BS4BaseScraper:
             return self.logger.log(msg, level)
         elif self.logger and not isinstance(self.logger, Logger):
             raise TypeError('Invalid type for `self.logger`. `self.logger` should be an instance of bs4_web_scraper.logging.Logger')
-        return print(msg + '\n')
+        
+        if self.log_to_console:
+            print(msg + '\n')
+        return None
 
 
     def close_session(self):
@@ -258,7 +287,7 @@ class BS4BaseScraper:
 
     def renew_session(self):
         """Reassigns a new session to `self._session`"""
-        self._session = requests.Session()
+        self.session = requests.Session()
 
 
     def get_base_url(self, url: str) -> str:
@@ -288,7 +317,7 @@ class BS4BaseScraper:
         self._base_url = self.get_base_url(url)
 
     
-    def _validate_auth_credentials(self, credentials: Dict[str, str]) -> str:
+    def validate_auth_credentials(self, credentials: Dict[str, str]) -> str:
         '''
         Validates the authentication credentials.
 
@@ -329,7 +358,7 @@ class BS4BaseScraper:
             credentials (Dict[str, str]): Authentication credentials
         '''
         self.set_base_url(credentials['auth_url'])
-        self._auth_url = self._validate_auth_credentials(credentials)
+        self._auth_url = self.validate_auth_credentials(credentials)
 
         if not self.base_url:
             raise AttributeError("`self.base_url` must be set.")
@@ -412,8 +441,13 @@ class BS4BaseScraper:
         return None
 
 
-    def _scrape(self, url: str, scrape_depth: int = 0, credentials: Dict[str, str] | None = None, 
-                translate_to: str | None = None, translation_engine: str = "default"):
+    def _scrape(
+            self, url: str, 
+            scrape_depth: int = 0, 
+            credentials: Dict[str, str] | None = None, 
+            translate_to: str | None = None, 
+            translation_engine: str = "default"
+        ):
         '''
         Main scraping method.
         
@@ -473,7 +507,13 @@ class BS4BaseScraper:
         return None
 
 
-    def scrape(self, url: str, scrape_depth: int = 0, credentials: Dict[str, str] | None=None, translate_to: str = None) -> None:
+    def scrape(
+            self, 
+            url: str, 
+            scrape_depth: int = 0, 
+            credentials: Dict[str, str] | None = None, 
+            translate_to: str = None
+        ) -> None:
         """
         #### Wrapper function for the private `_scrape` function of the class.
 
@@ -488,6 +528,16 @@ class BS4BaseScraper:
         is automatically detected by `self.translator`. Defaults to None.
         """
         raise NotImplementedError("Oops! You forgot to implement this method. Your method should pass the required arguments to the `_scrape` method.")
+    
+
+    def set_random_user_agent(self):
+        """
+        Sets a random user agent to the class for making requests
+        """
+        user_agents = utils.generate_random_user_agents()
+        random.shuffle(user_agents)
+        self._request_user_agent = random.choice(user_agents)
+        return None
 
 
     def get_request_headers(self) -> dict:
@@ -496,13 +546,9 @@ class BS4BaseScraper:
             raise AttributeError('Attribute `base_url` not set.')
         if self.auth_credentials:
             if not self._request_user_agent:
-                user_agents = utils.generate_random_user_agents()
-                random.shuffle(user_agents)
-                self._request_user_agent = random.choice(user_agents)
+                self.set_random_user_agent()
         else:
-            user_agents = utils.generate_random_user_agents()
-            random.shuffle(user_agents)
-            self._request_user_agent = random.choice(user_agents)
+            self.set_random_user_agent()
         
         headers = {
             'accept': '*/*',
@@ -568,14 +614,14 @@ class BS4BaseScraper:
             self.authenticate()
 
         if self.request_limit_setting is None:
-            response = self.session.get(url, headers=headers)
+            response = self.session.get(url, timeout=self.request_timeout)
             resp_ok = self._handle_response(response)
             if resp_ok is False:
                 return self.get(url)
 
         else:
             if self.request_limit_setting.can_make_requests is True:
-                response = self.session.get(url)
+                response = self.session.get(url, timeout=self.request_timeout)
                 self.request_limit_setting.request_made()
                 resp_ok = self._handle_response(response)
 
@@ -614,8 +660,15 @@ class BS4BaseScraper:
         return False
     
 
-    def save_to_file(self, filename: str, storage_path: str, content: str | bytes, 
-                        mode: str = "wb", encoding: str | None = 'utf-8', translate: bool = True):
+    def save_to_file(
+            self, 
+            filename: str, 
+            storage_path: str, 
+            content: str | bytes, 
+            mode: str = "wb", 
+            encoding: str | None = 'utf-8', 
+            translate: bool = True
+        ):
         '''
         Saves content to file using the specified arguments. 
         Creates the file if it does not exist.
@@ -704,8 +757,15 @@ class BS4BaseScraper:
         return src
         
 
-    def download_url(self, url: str, save_as: str | None = None, save_to: str | None = None, overwrite: bool = False,
-                        check_ext: bool = True, unique_if_query_params: bool = False):
+    def download_url(
+            self, 
+            url: str, 
+            save_as: str | None = None, 
+            save_to: str | None = None, 
+            overwrite: bool = False,
+            check_ext: bool = True, 
+            unique_if_query_params: bool = False
+        ):
         '''
         Download file from the given url. Saves the file in a storage path in `self.base_storage_dir` if `save_to` is not an absolute path.
 
@@ -842,11 +902,11 @@ class BS4BaseScraper:
                 raise InvalidScrapableTagError(f"Invalid scrapable_tag, `{scrapable_tag}`, found in `self._scrapable_tags`")
 
         with ThreadPoolExecutor() as executor:
-            _ = executor.map(lambda tag: self._get_tag_rra(tag, markup_file_handler), tags)
+            _ = executor.map(lambda tag: self._set_tag_rra(tag, markup_file_handler), tags)
         return soup
 
 
-    def _get_tag_rra(self, tag: Tag, markup_file_handler: FileHandler):
+    def _set_tag_rra(self, tag: Tag, markup_file_handler: FileHandler):
         rra_file_hdl = self.get_tag_rra(tag, download=True)
         # change the element's src to be compatible with the scraped website
         if isinstance(rra_file_hdl, FileHandler):
@@ -884,7 +944,7 @@ class BS4BaseScraper:
         '''
         Gets the bs4.element.Tag object 'resource-related-attribute' if it has any.
         
-        Returns the full resource URL if `download` is False or downloads the resource it points to if `download` is set to True.
+        Returns the full resource URL if `download` is False. Downloads the resource it points to if `download` is set to True.
 
         Returns None if it has no 'resource-related-attribute'
 

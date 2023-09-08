@@ -36,7 +36,13 @@ class RequestLimitSetting:
     requests_paused = False
     logger: Logger = None
     
-    def __init__(self, request_count: int, pause_duration: int | float = 5, max_retries: int = 2, logger: Logger = None) -> None:
+    def __init__(
+            self, 
+            request_count: int, 
+            pause_duration: int | float = 5, 
+            max_retries: int = 2, 
+            logger: Logger = None
+        ) -> None:
         if not isinstance(request_count, int):
             raise TypeError('`request_count` should be of type int')
         if not isinstance(max_retries, int):

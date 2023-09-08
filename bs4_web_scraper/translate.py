@@ -6,15 +6,18 @@ DESCRIPTION: ::
     Enterprises provide free services, we should be grateful instead of making trouble.
 """
 
-from typing import Dict, List, IO
+from typing import Dict, List
 import time
 import copy
 import random
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 from concurrent.futures import ThreadPoolExecutor
-import translators as ts
-from translators.server import TranslatorsServer, tss
+try:
+    import translators as ts
+    from translators.server import TranslatorsServer, tss
+except Exception as exc:
+    raise ConnectionError(f"Could not import `translators` module: {exc}")
 
 from . import utils
 from .logger import Logger
@@ -166,8 +169,11 @@ class Translator:
         
         '''
         if target_lang and not self.lang_is_supported(target_lang):
-            raise UnsupportedLanguageError("Unsupported target language for translation", target_lang, self.translation_engine)
-
+            raise UnsupportedLanguageError(
+                "Unsupported target language for translation", 
+                target_lang, 
+                self.translation_engine
+            )
         self.target_language = target_lang.strip().lower()
 
 
@@ -180,8 +186,11 @@ class Translator:
         
         '''
         if src_lang and src_lang != 'auto' and not self.lang_is_supported(src_lang):
-            raise UnsupportedLanguageError("Unsupported source language for translation", src_lang, self.translation_engine)
-
+            raise UnsupportedLanguageError(
+                "Unsupported source language for translation", 
+                src_lang, 
+                self.translation_engine
+            )
         self.source_language = src_lang.strip().lower()
 
 
@@ -215,8 +224,15 @@ class Translator:
         return None
 
 
-    def translate(self, content: str | bytes | BeautifulSoup, src_lang: str="auto", target_lang: str="en", 
-                  cache: bool=True, is_markup: bool=False, **kwargs) -> str | bytes:
+    def translate(
+            self, 
+            content: str | bytes | BeautifulSoup, 
+            src_lang: str="auto", 
+            target_lang: str="en", 
+            cache: bool=True, 
+            is_markup: bool=False, 
+            **kwargs
+        ) -> str | bytes:
         '''
         Translate `content` from `src_lang` to `target_lang`.
 
@@ -237,7 +253,14 @@ class Translator:
         return self.translate_text(content, src_lang, target_lang, cache, **kwargs)
         
     
-    def translate_text(self, text: str, src_lang: str="auto", target_lang: str="en", cache: bool=True, **kwargs) -> str:
+    def translate_text(
+            self, 
+            text: str, 
+            src_lang: str="auto", 
+            target_lang: str="en", 
+            cache: bool=True, 
+            **kwargs
+        ) -> str:
         '''
         Translate text from `src_lang` to `target_lang`.
 
@@ -275,22 +298,34 @@ class Translator:
                     return self._cache[text]
                 else:
                     translated_text = self.server.translate_text(
-                                                query_text=text, to_language=target_lang, from_language=src_lang, 
-                                                translator=self.translation_engine, **kwargs_
-                                                )
+                        query_text=text, 
+                        to_language=target_lang, 
+                        from_language=src_lang, 
+                        translator=self.translation_engine, 
+                        **kwargs_
+                    )
                     self._cache[text] = translated_text
                     return translated_text
             return self.server.translate_text(
-                                query_text=text, to_language=target_lang, from_language=src_lang, 
-                                translator=self.translation_engine, **kwargs_
-                                )
+                query_text=text, 
+                to_language=target_lang, 
+                from_language=src_lang, 
+                translator=self.translation_engine, 
+                **kwargs_
+            )
         except Exception as e:
             error_ = TranslationError(f"Error translating text: {e}")
             self._log(f"{error_}", level='error')
             return text
 
 
-    def translate_markup(self, markup: str | bytes, src_lang: str="auto", target_lang: str="en", **kwargs) -> str | bytes:
+    def translate_markup(
+            self, 
+            markup: str | bytes, 
+            src_lang: str="auto", 
+            target_lang: str="en", 
+            **kwargs
+        ) -> str | bytes:
         '''
         Translates markup.
 
@@ -377,7 +412,13 @@ class Translator:
     #         return markup
 
 
-    def translate_file(self, filepath: str, src_lang: str="auto", target_lang: str="en", **kwargs):
+    def translate_file(
+            self, 
+            filepath: str, 
+            src_lang: str="auto", 
+            target_lang: str="en", 
+            **kwargs
+        ):
         '''
         Translates file from `src_lang` to `target_lang`.
 
@@ -431,7 +472,14 @@ class Translator:
             raise TranslationError(f"File cannot be translated. {e}")
 
 
-    def translate_soup_tag(self, element: Tag, src_lang: str = "auto", target_lang: str = "en", _ct: int = 0, **kwargs) -> None:
+    def translate_soup_tag(
+            self, 
+            element: Tag, 
+            src_lang: str = "auto", 
+            target_lang: str = "en", 
+            _ct: int = 0, 
+            **kwargs
+        ) -> None:
         '''
         Translates the text of a BeautifulSoup element.
 
@@ -478,7 +526,14 @@ class Translator:
         return None
 
 
-    def translate_soup(self, soup: BeautifulSoup, src_lang: str = "auto", target_lang: str = "en", thread: bool = True, **kwargs) -> BeautifulSoup:
+    def translate_soup(
+            self, 
+            soup: BeautifulSoup, 
+            src_lang: str = "auto", 
+            target_lang: str = "en", 
+            thread: bool = True, 
+            **kwargs
+        ) -> BeautifulSoup:
         '''
         Translates the text of a BeautifulSoup object.
 
