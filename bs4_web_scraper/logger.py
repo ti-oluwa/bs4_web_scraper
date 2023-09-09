@@ -31,7 +31,7 @@ class Logger:
     _format: str = "%(asctime)s - %(levelname)s - %(message)s"
     date_format: str = "%d/%m/%Y %H:%M:%S (%Z)"
     file_mode: str = 'a+'
-    to_console: str = False
+    to_console: bool = False
 
     def __init__(self, name: str, log_filepath: str) -> None:
         log_filepath = log_filepath.replace('/', '\\')
