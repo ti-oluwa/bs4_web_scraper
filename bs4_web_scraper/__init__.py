@@ -33,10 +33,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__version__ = '0.1.7'
+__version__ = '0.1.9'
 __date__ = '27-05-2023'
 __author__ = 'ti-oluwa'
-__doc__ = 'A web scraper that uses BeautifulSoup4 to scrape web pages and can translate them to__ other languages.'
+__doc__ = 'A web scraper that uses BeautifulSoup4 to scrape web pages and can translate them to other languages.'
 __license__ = 'MIT'
 __title__ = 'bs4_web_scraper'
 __url__ = 'https://github.com/ti-oluwa/bs4_web_scraper'

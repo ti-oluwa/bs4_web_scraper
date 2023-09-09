@@ -84,8 +84,10 @@ class Translator:
         'small', 'b', 'q', 'option', 'code', 'h2', 'a', 'strong', 'span',
     ]
 
-    def __init__(self, translation_engine: str = "bing", ) -> None:
+    def __init__(self, translation_engine: str = "bing", log_to_console: bool = True) -> None:
         self.translation_engine = translation_engine
+        self.log_to_console = log_to_console
+
 
     @property
     def server(self):
@@ -129,10 +131,17 @@ class Translator:
             level (str | None): The level of message to log.
         '''
         if self.logger and isinstance(self.logger, Logger):
-            self.logger.log(message, level)
+            prev_val = self.logger.to_console
+            try:
+                self.logger.to_console = self.log_to_console
+                return self.logger.log(message, level)
+            finally:
+                self.logger.to_console = prev_val
         elif self.logger and not isinstance(self.logger, Logger):
             raise TypeError('Invalid type for `self.logger`. `self.logger` should be an instance of bs4_web_scraper.logging.Logger')
-        return print(message + '\n') 
+        if self.log_to_console:
+            print(message + '\n')
+        return None
     
 
     def lang_is_supported(self, lang_code: str) -> bool:

@@ -41,7 +41,8 @@ class RequestLimitSetting:
             request_count: int, 
             pause_duration: int | float = 5, 
             max_retries: int = 2, 
-            logger: Logger = None
+            logger: Logger = None,
+            log_to_console: bool = True
         ) -> None:
         if not isinstance(request_count, int):
             raise TypeError('`request_count` should be of type int')
@@ -58,6 +59,7 @@ class RequestLimitSetting:
         self.no_of_available_request = request_count
         self.no_of_available_retries = max_retries
         self.logger = logger
+        self.log_to_console = log_to_console
 
 
     def __setattr__(self, __name: str, __value: Any) -> None:
@@ -84,13 +86,19 @@ class RequestLimitSetting:
         Args:
             message (str): The message to log
             level (str | None): The level of message to log.
-        '''
-            
+        '''  
         if self.logger and isinstance(self.logger, Logger):
-            return self.logger.log(message, level)
+            prev_val = self.logger.to_console 
+            try:
+                self.logger.to_console = self.log_to_console
+                return self.logger.log(message, level)
+            finally:
+                self.logger.to_console = prev_val 
         elif self.logger and not isinstance(self.logger, Logger):
-            raise TypeError('Invalid type for `self.logger`. `self.logger` should be an instance of bs4_web_scraper.logging.Logger')
-        return print(message + '\n')        
+            raise TypeError('Invalid type for `self.logger`. `self.logger` should be an instance of bs4_web_scraper.logging.Logger')  
+        if self.log_to_console:
+            print(message + '\n') 
+        return None    
 
 
     def got_response_error(self) -> None:

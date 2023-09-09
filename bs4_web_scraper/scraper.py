@@ -394,7 +394,7 @@ class BS4WebScraper(BS4BaseScraper):
                             break
                         continue           
                 continue
-        return urls
+        return list(set(urls))
     
 
     def find_all_tags(
@@ -579,7 +579,7 @@ class BS4WebScraper(BS4BaseScraper):
                             break
                         continue
                 continue
-        return comments
+        return list(set(comments))
 
     
     def find_links(
@@ -950,6 +950,7 @@ class BS4WebScraper(BS4BaseScraper):
                 r = ''.join(r)
             result_.append(r)
 
+        result_ = list(set(result_))
         if result_ and depth == 0 and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Matches')
             self.save_results(result_, file_path, **kwargs)

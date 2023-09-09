@@ -144,7 +144,7 @@ class BS4BaseScraper:
             no_of_requests_before_pause: int = 20, 
             scrape_session_pause_duration: int | float | Any = "auto",
             max_no_of_retries: int = 3, 
-            request_timeout: Tuple[int, int] | int = (10, 10), 
+            request_timeout: Tuple[int, int] | int = (30, 30), 
             base_storage_dir: str = '.', 
             storage_path: str = '', 
             log_filepath: str | None = None,
@@ -174,6 +174,7 @@ class BS4BaseScraper:
             pause_duration=scrape_session_pause_duration, 
             max_retries=self.max_no_of_retries, 
             logger=self.logger,
+            log_to_console=log_to_console
         )
         self.log_to_console = log_to_console
 
@@ -434,7 +435,7 @@ class BS4BaseScraper:
                                     and translation_engine not in translate.translation_engines):
                 raise UnsupportedLanguageError("Unsupported translation engine")
 
-        self.translator = translate.Translator()
+        self.translator = translate.Translator(log_to_console=self.log_to_console)
         if translation_engine != "default":
             self.translator.translation_engine = translation_engine
         self.translator.logger = self.logger
