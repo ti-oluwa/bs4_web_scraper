@@ -1,6 +1,5 @@
 """
-DESCRIPTION: ::
-    Utility functions for the bs4_web_scraper package.
+Utility functions for the bs4_web_scraper package.
 """
 
 import time

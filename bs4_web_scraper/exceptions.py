@@ -1,3 +1,6 @@
+"""
+Exceptions for bs4_web_scraper
+"""
 
 class InvalidURLError(Exception):
     """URL is not valid"""

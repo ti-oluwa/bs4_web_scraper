@@ -8,6 +8,8 @@ This module contains the following classes: ::
     - `RequestLimitSetting`: Used to creates instances that is used to limit request frequency for the scraper.
     - `FileHandler`: Used for basic file handling operations, reading and writing into supported file types.
 
+@Author: Daniel T. Afolayan (ti-oluwa.github.io)
+
 ### Scrape responsibly and Do not send high frequency requests.
 
 MIT License
@@ -33,15 +35,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__version__ = '0.1.9'
-__date__ = '27-05-2023'
-__author__ = 'ti-oluwa'
-__doc__ = 'A web scraper that uses BeautifulSoup4 to scrape web pages and can translate them to other languages.'
+__version__ = '0.2.0'
+__date__ = '20-09-2023'
+__author__ = 'Daniel T. Afolayan'
 __license__ = 'MIT'
 __title__ = 'bs4_web_scraper'
 __url__ = 'https://github.com/ti-oluwa/bs4_web_scraper'
-__description__ = 'A web scraper that uses BeautifulSoup4 to scrape web pages and can translates them to other languages.'
-__keywords__ = 'web scraper, bs4, beautifulsoup4, web scraping, web scraping with python, web scraping with bs4, web scraping with beautifulsoup4, web scraping with translation, web scraping with translation to other languages, web scraping with translation to other languages with python, web scraping with translation to other languages with bs4, web scraping with translation to other languages with beautifulsoup4, web scraping with translation to other languages with python and bs4, web scraping with translation to other languages with python and beautifulsoup4,'
 __maintainer__ = 'ti-oluwa'
 __maintainer_email__ = 'tioluwa.dev@gmail.com'
 __requires__ = [

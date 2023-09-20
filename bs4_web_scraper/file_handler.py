@@ -1,3 +1,7 @@
+"""
+Basic file handling module for reading and writing to files.
+"""
+
 import os
 import yaml
 import toml
@@ -155,7 +159,7 @@ class FileHandler:
         """
         Empties file.
 
-        Returns the file open in the mode it was being used in before clearing was done.
+        Returns the file open in the mode it was being used, before clearing was done.
         """
         im_ = self.file.mode
         self.open_file('w')
