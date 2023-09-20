@@ -1,11 +1,10 @@
 """
-DESCRIPTION: ::
-    This module contains the BS4WebScraper class which is the base class for creating scraper instances 
-    used to scrape websites.
+This module contains the BS4WebScraper class which is the base class for creating scraper instances 
+used to scrape websites.
 
-    Don't make high frequency requests! Scrape responsibly!
-    If you are using this module to scrape websites for commercial purposes, please consider supporting the
-    websites you are scraping by making a donation.
+Don't make high frequency requests! Scrape responsibly!
+If you are using this module to scrape websites for commercial purposes, please consider supporting the
+websites you are scraping by making a donation.
 """
 import os
 import re
@@ -708,6 +707,7 @@ class BS4WebScraper(BS4BaseScraper):
             {'as': 'font'}
         )
         result = self.find_urls(url, target='link', attrs=attrs, depth=depth, count=kwargs.get('count', None))
+        # FUTURE IMPLEMENTATION WILL INCLUDE SEARCH FOR FONT-FACE CSS RULES (@font-face, @import, @font-feature-values)
         if result and save_to_file is True:
             kwargs['csv_head'] = kwargs.get('csv_head', 'Font Links')
             self.save_results(result, file_path, **kwargs)
@@ -852,6 +852,8 @@ class BS4WebScraper(BS4BaseScraper):
         Searches for and returns a list of phone numbers which conform to the E.164 standard found in the given url. 
         Checks links for phone numbers as well.
 
+        E.164 standard: https://en.wikipedia.org/wiki/E.164 defines a minimum length of 7 and maximum length of 15 digits.
+
         Returns a list of phone numbers.
 
         Args:
@@ -866,10 +868,11 @@ class BS4WebScraper(BS4BaseScraper):
                 * `csv_head` (str): Heading to be used for saving 'csv' results and is passed to the `save_results` function if `save_to_file` is True.
                 * `re_flags` (RegexFlag): adding regex flags and is passed to the `re.compile` function.
         """
-        pn_re = r'(\+\d{1,3})?[\s-]?(\d{7,16})'
+        pn_re = r'(?:(?:\+|00)(\d{1,4}))?[\s\-]?(?:(\d{2,4})[\s\-]?(\d{2,4}))[\s\-]?(\d{2,4})'
         kwargs['csv_head'] = kwargs.get('csv_head', 'Phone Numbers')
-        return self.find_pattern(url, pn_re, depth, save_to_file, file_path, **kwargs)
-    
+        pns = self.find_pattern(url, pn_re, depth, save_to_file, file_path, **kwargs)
+        return [ pn for pn in pns if len(pn) >= 7 and len(pn) <= 16 ]
+
 
     def find_pattern(
             self, url: str, 

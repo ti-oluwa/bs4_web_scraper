@@ -1,6 +1,5 @@
 """
-DESCRIPTION: ::
-    This module contains the BS4BaseScraper class which is the base class for creating scraper subclasses.
+This module contains the BS4BaseScraper class which is the base class for creating scraper subclasses.
 """
 
 from typing import IO, Any, Dict, List, Tuple
@@ -421,7 +420,7 @@ class BS4BaseScraper:
         response = self.get(url)
         if response:
             return self.make_soup(response.content, **kwargs)
-        return None
+        raise InvalidURLError(f"Invalid url: {url}")
 
 
     def set_translator(self, translation_engine: str = "default") -> None:

@@ -1,9 +1,8 @@
 """
-DESCRIPTION: ::
-    This module contains the Translator class for translating text and markup (html, xml, xhtml...) content using the `translators` package.
+This module contains the Translator class for translating text and markup (html, xml, xhtml...) content using the `translators` package.
 
-    Avoid making high frequency requests to the translation engine. This may result in your IP address being blocked.
-    Enterprises provide free services, we should be grateful instead of making trouble.
+Avoid making high frequency requests to the translation engine. This may result in your IP address being blocked.
+Enterprises provide free services, we should be grateful instead of making trouble.
 """
 
 from typing import Dict, List

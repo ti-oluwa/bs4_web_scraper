@@ -1,3 +1,5 @@
+"""Request rate limiter module."""
+
 import time
 from typing import Any
 

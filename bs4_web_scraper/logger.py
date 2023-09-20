@@ -1,3 +1,7 @@
+"""
+Logger class for creating and managing process logs.
+"""
+
 import logging
 import os
 from typing import Any
@@ -97,17 +101,18 @@ class Logger:
         Args:
             - level (str): The logging level to set the logger to.
         '''
-        match level.upper():
-            case "INFO":
-                self._base_level = logging.INFO
-            case "DEBUG":
-                self._base_level = logging.DEBUG
-            case "WARNING":
-                self._base_level = logging.WARNING
-            case "ERROR":
-                self._base_level = logging.ERROR
-            case "CRITICAL":
-                self._base_level = logging.CRITICAL
+        if level.upper() == "INFO":
+            self._base_level = logging.INFO
+        elif level.upper() == "DEBUG":
+            self._base_level = logging.DEBUG
+        elif level.upper() == "WARNING":
+            self._base_level = logging.WARNING
+        elif level.upper() == "ERROR":
+            self._base_level = logging.ERROR
+        elif level.upper() == "CRITICAL":
+            self._base_level = logging.CRITICAL
+        else:
+            raise ValueError(f'{level} is not a valid base logging level')
         return None
 
     
