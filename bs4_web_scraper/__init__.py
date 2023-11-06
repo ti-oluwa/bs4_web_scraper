@@ -35,19 +35,12 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-__version__ = '0.2.0'
-__date__ = '20-09-2023'
+__version__ = '0.2.2'
+__date__ = '02-11-2023'
 __author__ = 'Daniel T. Afolayan'
 __license__ = 'MIT'
 __title__ = 'bs4_web_scraper'
 __url__ = 'https://github.com/ti-oluwa/bs4_web_scraper'
-__maintainer__ = 'ti-oluwa'
-__maintainer_email__ = 'tioluwa.dev@gmail.com'
-__requires__ = [
-    'beautifulsoup4', 'requests', 'translators', 'lxml', 
-    'html5lib', 'urllib3', 'pytz', 'soupsieve', 'pyyaml',
-    'toml',
-]
 
 from .exceptions import *
 
