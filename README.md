@@ -502,9 +502,4 @@ The base log level can be set to any of the following: `DEBUG`, `INFO`, `WARNING
 - [Requests](https://requests.readthedocs.io/en/master/)
 - [Translators](https://pypi.org/project/translators/)
 
-
-#### Contributors and feedbacks are welcome. For feedbacks, please open an issue or contact me at tioluwa.dev@gmail.com or on twitter [@ti_oluwa_](https://twitter.com/ti_oluwa_)
-
-#### To contribute, please fork the repo and submit a pull request
-
-#### If you find this module useful, please consider giving it a star. Thanks!
+Contributions are welcome. Please fork the repository and submit a pull request.

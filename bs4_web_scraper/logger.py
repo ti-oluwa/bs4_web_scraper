@@ -60,37 +60,41 @@ class Logger:
     def __setattr__(self, __name: str, __value: Any) -> None:
         super().__setattr__(__name, __value)
         self._update_config()
+        return None
 
     
-    def _to_console(self) -> None:
+    def _set_console(self) -> None:
         '''
-        Logs messages to the console.
-
-        If `self.to_console` is True, all subsequent log messages will be logged to the console.
+        Adds and removes console handler based on `self.to_console`
         '''
-        # set up logging to console
-        console = logging.StreamHandler()
-        console.setLevel(self._base_level)
-        # set a format which is simpler for console use
-        formatter = logging.Formatter(fmt=self._format, datefmt=self.date_format.replace('(%Z)', '(%z)'))
-        console.setFormatter(formatter)
-        # add the handler to the logger object and remove any existing handlers
-        handlers = self._logger.handlers
-        for h in handlers:
-            self._logger.removeHandler(h)
-        self._logger.addHandler(console)
+        if self.to_console:
+            # set up logging to console
+            console = logging.StreamHandler()
+            console.setLevel(self._base_level)
+            # set a format which is simpler for console use
+            formatter = logging.Formatter(fmt=self._format, datefmt=self.date_format.replace('(%Z)', '(%z)'))
+            console.setFormatter(formatter)
+            # add the handler to the logger object and remove any existing handlers
+            handlers = self._logger.handlers
+            for h in handlers:
+                self._logger.removeHandler(h)
+            self._logger.addHandler(console)
+        else:
+            handlers = self._logger.handlers
+            for h in handlers:
+                self._logger.removeHandler(h)
+        return None
 
-
+    
     def _update_config(self) -> None:
         '''Updates the logger's configuration.'''
         logging.basicConfig(filename=self.filename, level=self._base_level, 
                             format=self._format, datefmt=self.date_format,
                             filemode=self.file_mode, force=True)
-        if self.to_console:
-            try:
-                self._to_console()
-            except Exception as e:
-                self.log_error(e)
+        try:
+            self._set_console()
+        except:
+            pass
         return None
 
 

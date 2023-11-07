@@ -6,8 +6,8 @@ import time
 import os
 import random
 import string
-from collections.abc import Iterable
-
+from typing import Tuple, List
+from array import array
 
 # DEFAULT USER-AGENTS THAT CAN BE USED IN PLACE OF THE RANDOM USER-AGENTS
 USER_AGENTS = [
@@ -39,23 +39,22 @@ def generate_unique_filename(old_filename: str) -> str:
     return unique_filename
 
 
-def slice_iterable(iterable: Iterable, slice_size: int) -> list[Iterable]:
+def slice_iterable(iter: List | str | Tuple | array, slice_size: int):
     '''
     Slices an iterable into smaller iterables of size `slice_size`
 
     Args:
-        iterable (Iterable): The iterable to slice.
+        iter (Iterable): The iterable to slice.
         slice_size (int): The size of each slice
-    
     '''
-    if not isinstance(iterable, Iterable):
-        raise TypeError('Invalid argument type for `iterable`')
+    if not isinstance(iter, (list, tuple, str, array)):
+        raise TypeError('Invalid argument type for `iter`')
     if not isinstance(slice_size, int):
         raise TypeError('Invalid argument type for `slice_size`')
     if slice_size < 1:
         raise ValueError('`slice_size` should be greater than 0')
 
-    return [iterable[i:i+slice_size] for i in range(0, len(iterable), slice_size)]
+    return [ iter[ i : i + slice_size ] for i in range(0, len(iter), slice_size) ]
 
 
 
